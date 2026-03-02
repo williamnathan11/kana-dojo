@@ -2,20 +2,121 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const STORAGE_KEY = "kana_trainer_state_v2";
+const STORAGE_KEY = "kana_trainer_state_v3";
 
 export default function KanaTrainer() {
-  // Keep 5 for testing. Swap to your full list later.
-  const kanaList = useMemo(
-    () => [
-      ["あ", "a"],
-      ["い", "i"],
-      ["う", "u"],
-      ["え", "e"],
-      ["お", "o"],
-    ],
-    []
-  );
+  // 255 items: Hiragana + Katakana + dakuten/handakuten + yōon + small kana + common foreign katakana
+  const kanaList = useMemo(() => {
+    const hiragana_basic = [
+      ["あ", "a"], ["い", "i"], ["う", "u"], ["え", "e"], ["お", "o"],
+      ["か", "ka"], ["き", "ki"], ["く", "ku"], ["け", "ke"], ["こ", "ko"],
+      ["さ", "sa"], ["し", "shi"], ["す", "su"], ["せ", "se"], ["そ", "so"],
+      ["た", "ta"], ["ち", "chi"], ["つ", "tsu"], ["て", "te"], ["と", "to"],
+      ["な", "na"], ["に", "ni"], ["ぬ", "nu"], ["ね", "ne"], ["の", "no"],
+      ["は", "ha"], ["ひ", "hi"], ["ふ", "fu"], ["へ", "he"], ["ほ", "ho"],
+      ["ま", "ma"], ["み", "mi"], ["む", "mu"], ["め", "me"], ["も", "mo"],
+      ["や", "ya"], ["ゆ", "yu"], ["よ", "yo"],
+      ["ら", "ra"], ["り", "ri"], ["る", "ru"], ["れ", "re"], ["ろ", "ro"],
+      ["わ", "wa"], ["を", "wo"],
+      ["ん", "n"],
+    ];
+
+    const hiragana_daku = [
+      ["が", "ga"], ["ぎ", "gi"], ["ぐ", "gu"], ["げ", "ge"], ["ご", "go"],
+      ["ざ", "za"], ["じ", "ji"], ["ず", "zu"], ["ぜ", "ze"], ["ぞ", "zo"],
+      ["だ", "da"], ["ぢ", "di"], ["づ", "du"], ["で", "de"], ["ど", "do"],
+      ["ば", "ba"], ["び", "bi"], ["ぶ", "bu"], ["べ", "be"], ["ぼ", "bo"],
+      ["ぱ", "pa"], ["ぴ", "pi"], ["ぷ", "pu"], ["ぺ", "pe"], ["ぽ", "po"],
+    ];
+
+    const hiragana_yoon = [
+      ["きゃ", "kya"], ["きゅ", "kyu"], ["きょ", "kyo"],
+      ["しゃ", "sha"], ["しゅ", "shu"], ["しょ", "sho"],
+      ["ちゃ", "cha"], ["ちゅ", "chu"], ["ちょ", "cho"],
+      ["にゃ", "nya"], ["にゅ", "nyu"], ["にょ", "nyo"],
+      ["ひゃ", "hya"], ["ひゅ", "hyu"], ["ひょ", "hyo"],
+      ["みゃ", "mya"], ["みゅ", "myu"], ["みょ", "myo"],
+      ["りゃ", "rya"], ["りゅ", "ryu"], ["りょ", "ryo"],
+      ["ぎゃ", "gya"], ["ぎゅ", "gyu"], ["ぎょ", "gyo"],
+      ["じゃ", "ja"], ["じゅ", "ju"], ["じょ", "jo"],
+      ["びゃ", "bya"], ["びゅ", "byu"], ["びょ", "byo"],
+      ["ぴゃ", "pya"], ["ぴゅ", "pyu"], ["ぴょ", "pyo"],
+    ];
+
+    const katakana_basic = [
+      ["ア", "a"], ["イ", "i"], ["ウ", "u"], ["エ", "e"], ["オ", "o"],
+      ["カ", "ka"], ["キ", "ki"], ["ク", "ku"], ["ケ", "ke"], ["コ", "ko"],
+      ["サ", "sa"], ["シ", "shi"], ["ス", "su"], ["セ", "se"], ["ソ", "so"],
+      ["タ", "ta"], ["チ", "chi"], ["ツ", "tsu"], ["テ", "te"], ["ト", "to"],
+      ["ナ", "na"], ["ニ", "ni"], ["ヌ", "nu"], ["ネ", "ne"], ["ノ", "no"],
+      ["ハ", "ha"], ["ヒ", "hi"], ["フ", "fu"], ["ヘ", "he"], ["ホ", "ho"],
+      ["マ", "ma"], ["ミ", "mi"], ["ム", "mu"], ["メ", "me"], ["モ", "mo"],
+      ["ヤ", "ya"], ["ユ", "yu"], ["ヨ", "yo"],
+      ["ラ", "ra"], ["リ", "ri"], ["ル", "ru"], ["レ", "re"], ["ロ", "ro"],
+      ["ワ", "wa"], ["ヲ", "wo"],
+      ["ン", "n"],
+    ];
+
+    const katakana_daku = [
+      ["ガ", "ga"], ["ギ", "gi"], ["グ", "gu"], ["ゲ", "ge"], ["ゴ", "go"],
+      ["ザ", "za"], ["ジ", "ji"], ["ズ", "zu"], ["ゼ", "ze"], ["ゾ", "zo"],
+      ["ダ", "da"], ["ヂ", "di"], ["ヅ", "du"], ["デ", "de"], ["ド", "do"],
+      ["バ", "ba"], ["ビ", "bi"], ["ブ", "bu"], ["ベ", "be"], ["ボ", "bo"],
+      ["パ", "pa"], ["ピ", "pi"], ["プ", "pu"], ["ペ", "pe"], ["ポ", "po"],
+    ];
+
+    const katakana_yoon = [
+      ["キャ", "kya"], ["キュ", "kyu"], ["キョ", "kyo"],
+      ["シャ", "sha"], ["シュ", "shu"], ["ショ", "sho"],
+      ["チャ", "cha"], ["チュ", "chu"], ["チョ", "cho"],
+      ["ニャ", "nya"], ["ニュ", "nyu"], ["ニョ", "nyo"],
+      ["ヒャ", "hya"], ["ヒュ", "hyu"], ["ヒョ", "hyo"],
+      ["ミャ", "mya"], ["ミュ", "myu"], ["ミョ", "myo"],
+      ["リャ", "rya"], ["リュ", "ryu"], ["リョ", "ryo"],
+      ["ギャ", "gya"], ["ギュ", "gyu"], ["ギョ", "gyo"],
+      ["ジャ", "ja"], ["ジュ", "ju"], ["ジョ", "jo"],
+      ["ビャ", "bya"], ["ビュ", "byu"], ["ビョ", "byo"],
+      ["ピャ", "pya"], ["ピュ", "pyu"], ["ピョ", "pyo"],
+    ];
+
+    const small_hiragana = [
+      ["ぁ", "xa"], ["ぃ", "xi"], ["ぅ", "xu"], ["ぇ", "xe"], ["ぉ", "xo"],
+      ["ゃ", "xya"], ["ゅ", "xyu"], ["ょ", "xyo"],
+      ["っ", "xtsu"],
+      ["ゎ", "xwa"],
+      ["ゕ", "xka"], ["ゖ", "xke"],
+    ];
+
+    const small_katakana = [
+      ["ァ", "xa"], ["ィ", "xi"], ["ゥ", "xu"], ["ェ", "xe"], ["ォ", "xo"],
+      ["ャ", "xya"], ["ュ", "xyu"], ["ョ", "xyo"],
+      ["ッ", "xtsu"],
+      ["ヮ", "xwa"],
+      ["ヵ", "xka"], ["ヶ", "xke"],
+    ];
+
+    // Common foreign-sound katakana (23 items) to hit 255 total
+    const extras = [
+      ["ヴ", "vu"], ["ウィ", "wi"], ["ウェ", "we"], ["ウォ", "who"],
+      ["ヴァ", "va"], ["ヴィ", "vi"], ["ヴェ", "ve"], ["ヴォ", "vo"], ["ヴュ", "vyu"],
+      ["ファ", "fa"], ["フィ", "fi"], ["フェ", "fe"], ["フォ", "fo"], ["フュ", "fyu"],
+      ["ティ", "ti"], ["トゥ", "tu"], ["ディ", "di"], ["ドゥ", "du"],
+      ["シェ", "she"], ["チェ", "che"], ["ジェ", "je"],
+      ["ツァ", "tsa"], ["ツィ", "tsi"],
+    ];
+
+    return [
+      ...hiragana_basic,
+      ...hiragana_daku,
+      ...hiragana_yoon,
+      ...katakana_basic,
+      ...katakana_daku,
+      ...katakana_yoon,
+      ...small_hiragana,
+      ...small_katakana,
+      ...extras,
+    ];
+  }, []);
 
   const inputRef = useRef(null);
   const startRef = useRef(0);
@@ -38,7 +139,7 @@ export default function KanaTrainer() {
       const saved = JSON.parse(raw);
       const ok =
         saved &&
-        saved.version === 2 &&
+        saved.version === 3 &&
         Array.isArray(saved.order) &&
         typeof saved.pos === "number" &&
         Array.isArray(saved.results) &&
@@ -61,7 +162,7 @@ export default function KanaTrainer() {
   useEffect(() => {
     if (!order.length) return;
     const payload = {
-      version: 2,
+      version: 3,
       kanaCount: kanaList.length,
       order,
       pos,
@@ -70,7 +171,7 @@ export default function KanaTrainer() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch {
-      // ignore storage errors
+      // ignore
     }
   }, [order, pos, results, kanaList.length]);
 
@@ -97,7 +198,7 @@ export default function KanaTrainer() {
     setTimeout(() => inputRef.current?.focus(), 0);
   }, [order, pos, finished]);
 
-  // Live running timer (resets via startRef on each kana)
+  // Live running timer
   useEffect(() => {
     if (!order.length) return;
 
@@ -151,11 +252,9 @@ export default function KanaTrainer() {
     const typed = value.trim().toLowerCase();
     const expected = current[1];
 
-    // Auto-submit only on exact match
     if (typed === expected) {
       recordCorrectAnswer();
     } else {
-      // show "error" styling only when they've typed at least expected length
       if (typed.length >= expected.length) setError(true);
     }
   }
@@ -210,7 +309,6 @@ export default function KanaTrainer() {
           />
         </div>
 
-        {/* Main content area: Kana while playing, Recap table when finished */}
         {!finished ? (
           <div style={styles.kanaWrap}>
             <div style={styles.kana}>{current[0]}</div>
@@ -306,19 +404,13 @@ const styles = {
     fontFamily:
       'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"',
   },
-
-  shell: {
-    width: "min(900px, 100%)",
-    textAlign: "center",
-  },
-
+  shell: { width: "min(900px, 100%)", textAlign: "center" },
   title: {
     margin: 0,
     fontSize: "clamp(34px, 5vw, 44px)",
     fontWeight: 800,
     letterSpacing: "-0.02em",
   },
-
   resetBtn: {
     marginTop: 14,
     height: 34,
@@ -330,7 +422,6 @@ const styles = {
     cursor: "pointer",
     fontWeight: 600,
   },
-
   statsRow: {
     marginTop: 22,
     display: "flex",
@@ -341,29 +432,11 @@ const styles = {
     overflowX: "auto",
     paddingBottom: 6,
   },
+  stat: { textAlign: "center", minWidth: 140, flex: "0 0 auto" },
+  statLabel: { fontSize: 11, opacity: 0.72, marginBottom: 6 },
+  statValue: { fontSize: 28, fontWeight: 700, letterSpacing: "-0.01em" },
 
-  stat: {
-    textAlign: "center",
-    minWidth: 140,
-    flex: "0 0 auto",
-  },
-  statLabel: {
-    fontSize: 11,
-    opacity: 0.72,
-    marginBottom: 6,
-  },
-  statValue: {
-    fontSize: 28,
-    fontWeight: 700,
-    letterSpacing: "-0.01em",
-  },
-
-  kanaWrap: {
-    marginTop: 34,
-    marginBottom: 24,
-    display: "grid",
-    placeItems: "center",
-  },
+  kanaWrap: { marginTop: 34, marginBottom: 24, display: "grid", placeItems: "center" },
   kana: {
     fontSize: "clamp(84px, 10vw, 118px)",
     fontWeight: 500,
@@ -373,18 +446,8 @@ const styles = {
     filter: "drop-shadow(0 10px 20px rgba(0,0,0,0.35))",
   },
 
-  recapWrap: {
-    marginTop: 26,
-    marginBottom: 18,
-    display: "grid",
-    gap: 12,
-    justifyItems: "center",
-  },
-  recapTitle: {
-    fontSize: 14,
-    fontWeight: 700,
-    opacity: 0.9,
-  },
+  recapWrap: { marginTop: 26, marginBottom: 18, display: "grid", gap: 12, justifyItems: "center" },
+  recapTitle: { fontSize: 14, fontWeight: 700, opacity: 0.9 },
   tableWrap: {
     width: "min(760px, 100%)",
     borderRadius: 10,
@@ -393,10 +456,7 @@ const styles = {
     boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
     overflow: "hidden",
   },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-  },
+  table: { width: "100%", borderCollapse: "collapse" },
   th: {
     textAlign: "left",
     fontSize: 12,
@@ -415,14 +475,8 @@ const styles = {
     background: "rgba(0,0,0,0.18)",
     opacity: 0.9,
   },
-  tr: {
-    borderBottom: "1px solid rgba(255,255,255,0.06)",
-  },
-  td: {
-    padding: "12px 14px",
-    fontSize: 13,
-    opacity: 0.9,
-  },
+  tr: { borderBottom: "1px solid rgba(255,255,255,0.06)" },
+  td: { padding: "12px 14px", fontSize: 13, opacity: 0.9 },
   tdRight: {
     padding: "12px 14px",
     fontSize: 13,
@@ -430,12 +484,8 @@ const styles = {
     opacity: 0.9,
     fontVariantNumeric: "tabular-nums",
   },
-  tdKana: {
-    padding: "12px 14px",
-    fontSize: 18,
-    letterSpacing: "0.02em",
-    opacity: 0.95,
-  },
+  tdKana: { padding: "12px 14px", fontSize: 18, letterSpacing: "0.02em", opacity: 0.95 },
+  doneText: { fontSize: 12, opacity: 0.75, marginTop: 2 },
 
   inputCard: {
     width: "min(560px, 100%)",
@@ -447,21 +497,9 @@ const styles = {
     boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
     textAlign: "left",
   },
-
-  inputLabelRow: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  inputLabel: {
-    fontSize: 12,
-    opacity: 0.85,
-  },
-
-  inputFieldWrap: {
-    position: "relative",
-  },
+  inputLabelRow: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
+  inputLabel: { fontSize: 12, opacity: 0.85 },
+  inputFieldWrap: { position: "relative" },
   input: {
     width: "100%",
     height: 44,
@@ -487,11 +525,5 @@ const styles = {
     opacity: 0.55,
     pointerEvents: "none",
     whiteSpace: "nowrap",
-  },
-
-  doneText: {
-    fontSize: 12,
-    opacity: 0.75,
-    marginTop: 2,
   },
 };
