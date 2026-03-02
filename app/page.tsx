@@ -302,7 +302,7 @@ useEffect(() => {
     saveState({ order: newOrder, pos: 0, results: [], liveElapsedMs: 0 });
   }
 
-  function handleAutoAdvance(nextValue) {
+  function handleAutoAdvance(nextValue: string) {
     if (!current) return;
 
     const typed = nextValue.trim().toLowerCase();
