@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const STORAGE_KEY = "kana_trainer_state_v3";
+const STORAGE_KEY = "kana_trainer_state_v4";
 
 export default function KanaTrainer() {
   // 255 items: Hiragana + Katakana + dakuten/handakuten + yōon + small kana + common foreign katakana
@@ -60,7 +60,7 @@ export default function KanaTrainer() {
     const katakana_daku = [
       ["ガ", "ga"], ["ギ", "gi"], ["グ", "gu"], ["ゲ", "ge"], ["ゴ", "go"],
       ["ザ", "za"], ["ジ", "ji"], ["ズ", "zu"], ["ゼ", "ze"], ["ゾ", "zo"],
-      ["ダ", "da"], ["ヂ", "di"], ["ヅ", "du"], ["デ", "de"], ["ド", "do"],
+      ["ダ", "da"], ["ヂ", "ji"], ["ヅ", "zu"], ["デ", "de"], ["ド", "do"],
       ["バ", "ba"], ["ビ", "bi"], ["ブ", "bu"], ["ベ", "be"], ["ボ", "bo"],
       ["パ", "pa"], ["ピ", "pi"], ["プ", "pu"], ["ペ", "pe"], ["ポ", "po"],
     ];
@@ -79,30 +79,32 @@ export default function KanaTrainer() {
       ["ピャ", "pya"], ["ピュ", "pyu"], ["ピョ", "pyo"],
     ];
 
-    const small_hiragana = [
-      ["ぁ", "xa"], ["ぃ", "xi"], ["ぅ", "xu"], ["ぇ", "xe"], ["ぉ", "xo"],
-      ["ゃ", "xya"], ["ゅ", "xyu"], ["ょ", "xyo"],
-      ["っ", "xtsu"],
-      ["ゎ", "xwa"],
-      ["ゕ", "xka"], ["ゖ", "xke"],
-    ];
+    //const small_hiragana = [
+    //  ["ぁ", "xa"], ["ぃ", "xi"], ["ぅ", "xu"], ["ぇ", "xe"], ["ぉ", "xo"],
+    //  ["ゃ", "xya"], ["ゅ", "xyu"], ["ょ", "xyo"],
+    //  ["っ", "xtsu"],
+    //  ["ゎ", "xwa"],
+    //  ["ゕ", "xka"], ["ゖ", "xke"],
+    //];
 
-    const small_katakana = [
-      ["ァ", "xa"], ["ィ", "xi"], ["ゥ", "xu"], ["ェ", "xe"], ["ォ", "xo"],
-      ["ャ", "xya"], ["ュ", "xyu"], ["ョ", "xyo"],
-      ["ッ", "xtsu"],
-      ["ヮ", "xwa"],
-      ["ヵ", "xka"], ["ヶ", "xke"],
-    ];
+    //const small_katakana = [
+    //  ["ァ", "xa"], ["ィ", "xi"], ["ゥ", "xu"], ["ェ", "xe"], ["ォ", "xo"],
+    //  ["ャ", "xya"], ["ュ", "xyu"], ["ョ", "xyo"],
+    //  ["ッ", "xtsu"],
+    //  ["ヮ", "xwa"],
+    //  ["ヵ", "xka"], ["ヶ", "xke"],
+    //];
 
-    // Common foreign-sound katakana (23 items) to hit 255 total
+    // Common foreign-sound katakana (33 items) to hit 241 total
     const extras = [
-      ["ヴ", "vu"], ["ウィ", "wi"], ["ウェ", "we"], ["ウォ", "who"],
+      ["ヴ", "vu"], ["ウィ", "wi"], ["ウェ", "we"], ["ウォ", "wo"],
       ["ヴァ", "va"], ["ヴィ", "vi"], ["ヴェ", "ve"], ["ヴォ", "vo"], ["ヴュ", "vyu"],
       ["ファ", "fa"], ["フィ", "fi"], ["フェ", "fe"], ["フォ", "fo"], ["フュ", "fyu"],
-      ["ティ", "ti"], ["トゥ", "tu"], ["ディ", "di"], ["ドゥ", "du"],
-      ["シェ", "she"], ["チェ", "che"], ["ジェ", "je"],
-      ["ツァ", "tsa"], ["ツィ", "tsi"],
+      ["ティ", "ti"], ["トゥ", "tu"], ["ディ", "di"], ["ドゥ", "du"], ["ドュ", "tyu"],["デュ", "dyu"],
+      ["シェ", "she"], ["チェ", "che"], ["ジェ", "je"], ["イェ", "ye"],
+      ["ツァ", "tsa"], ["ツィ", "tsi"], ["ツェ", "tse"], ["ツォ", "tso"],
+      ["グァ", "gwa"],
+      ["クァ", "kwa"], ["クィ", "kwi"], ["クェ", "kwe"], ["クォ", "kwo"],
     ];
 
     return [
@@ -129,6 +131,7 @@ export default function KanaTrainer() {
   const [results, setResults] = useState([]); // { kana, romaji, time, difficulty }
   const [error, setError] = useState(false);
   const [runningTime, setRunningTime] = useState(0);
+  const [started, setStarted] = useState(false); // <-- Welcome gate
 
   // Load state
   useEffect(() => {
@@ -139,22 +142,25 @@ export default function KanaTrainer() {
       const saved = JSON.parse(raw);
       const ok =
         saved &&
-        saved.version === 3 &&
+        saved.version === 4 &&
         Array.isArray(saved.order) &&
         typeof saved.pos === "number" &&
         Array.isArray(saved.results) &&
-        saved.kanaCount === kanaList.length;
+        saved.kanaCount === kanaList.length &&
+        typeof saved.started === "boolean";
 
       if (!ok) throw new Error("bad saved state");
 
       setOrder(saved.order);
       setPos(saved.pos);
       setResults(saved.results);
+      setStarted(saved.started);
     } catch {
       const shuffled = shuffle([...Array(kanaList.length).keys()]);
       setOrder(shuffled);
       setPos(0);
       setResults([]);
+      setStarted(false);
     }
   }, [kanaList.length]);
 
@@ -162,18 +168,19 @@ export default function KanaTrainer() {
   useEffect(() => {
     if (!order.length) return;
     const payload = {
-      version: 3,
+      version: 4,
       kanaCount: kanaList.length,
       order,
       pos,
       results,
+      started,
     };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch {
       // ignore
     }
-  }, [order, pos, results, kanaList.length]);
+  }, [order, pos, results, started, kanaList.length]);
 
   const finished = order.length > 0 && pos >= order.length;
   const current = !finished ? kanaList[order[pos]] : null;
@@ -184,9 +191,13 @@ export default function KanaTrainer() {
     return "Hard";
   }
 
-  // Reset timer each new kana + focus input
+  // Reset timer each new kana (only after started)
   useEffect(() => {
     if (!order.length) return;
+    if (!started) {
+      setRunningTime(0);
+      return;
+    }
     if (finished) return;
 
     submittingRef.current = false;
@@ -196,15 +207,17 @@ export default function KanaTrainer() {
     setError(false);
 
     setTimeout(() => inputRef.current?.focus(), 0);
-  }, [order, pos, finished]);
+  }, [order, pos, finished, started]);
 
-  // Live running timer
+  // Live running timer (only after started)
   useEffect(() => {
     if (!order.length) return;
 
-    if (finished) {
+    // Stop ticking if not started or finished
+    if (!started || finished) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
+      setRunningTime(0);
       return;
     }
 
@@ -219,10 +232,10 @@ export default function KanaTrainer() {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     };
-  }, [order.length, finished]);
+  }, [order.length, started, finished]);
 
   function recordCorrectAnswer() {
-    if (finished) return;
+    if (finished || !started) return;
     if (submittingRef.current) return;
 
     submittingRef.current = true;
@@ -246,6 +259,9 @@ export default function KanaTrainer() {
   function handleChange(value) {
     if (finished) return;
 
+    // Before starting: ignore typing (we start on keydown and prevent the character)
+    if (!started) return;
+
     setRomaji(value);
     if (error) setError(false);
 
@@ -257,6 +273,23 @@ export default function KanaTrainer() {
     } else {
       if (typed.length >= expected.length) setError(true);
     }
+  }
+
+  function handleKeyDown(e) {
+    if (finished) return;
+
+    // Welcome gate: first key starts the session and does NOT type into the box
+    if (!started) {
+      // Prevent “first key” from appearing in the input for keys that produce characters
+      if (e.key.length === 1 || e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+      }
+      setStarted(true);
+      return;
+    }
+
+    // Optional: allow Enter to do nothing (since autosubmit handles correctness)
+    // Keeping this empty intentionally.
   }
 
   function resetAll() {
@@ -271,8 +304,8 @@ export default function KanaTrainer() {
     setRomaji("");
     setError(false);
     setRunningTime(0);
+    setStarted(false);
     submittingRef.current = false;
-    startRef.current = performance.now();
 
     setTimeout(() => inputRef.current?.focus(), 0);
   }
@@ -305,13 +338,18 @@ export default function KanaTrainer() {
           <Stat label="Avg time (s)" value={avgTime.toFixed(2)} />
           <Stat
             label="Running (s)"
-            value={finished ? "0.00" : runningTime.toFixed(2)}
+            value={started && !finished ? runningTime.toFixed(2) : "0.00"}
           />
         </div>
 
         {!finished ? (
           <div style={styles.kanaWrap}>
-            <div style={styles.kana}>{current[0]}</div>
+            <div style={styles.kana}>{started ? current[0] : "Welcome!"}</div>
+            {!started && (
+              <div style={styles.welcomeHint}>
+                Click the textbox, then press any key to begin.
+              </div>
+            )}
           </div>
         ) : (
           <div style={styles.recapWrap}>
@@ -356,6 +394,7 @@ export default function KanaTrainer() {
               ref={inputRef}
               value={romaji}
               onChange={(e) => handleChange(e.target.value)}
+              onKeyDown={handleKeyDown}
               style={{
                 ...styles.input,
                 ...(error ? styles.inputError : null),
@@ -366,7 +405,9 @@ export default function KanaTrainer() {
               disabled={finished}
               placeholder=""
             />
-            <div style={styles.inputHint}>Auto-submits when correct</div>
+            <div style={styles.inputHint}>
+              {!started ? "Press any key to begin" : "Auto-submits when correct"}
+            </div>
           </div>
         </div>
       </div>
@@ -436,7 +477,7 @@ const styles = {
   statLabel: { fontSize: 11, opacity: 0.72, marginBottom: 6 },
   statValue: { fontSize: 28, fontWeight: 700, letterSpacing: "-0.01em" },
 
-  kanaWrap: { marginTop: 34, marginBottom: 24, display: "grid", placeItems: "center" },
+  kanaWrap: { marginTop: 34, marginBottom: 24, display: "grid", placeItems: "center", gap: 10 },
   kana: {
     fontSize: "clamp(84px, 10vw, 118px)",
     fontWeight: 500,
@@ -444,6 +485,10 @@ const styles = {
     letterSpacing: "0.02em",
     userSelect: "none",
     filter: "drop-shadow(0 10px 20px rgba(0,0,0,0.35))",
+  },
+  welcomeHint: {
+    fontSize: 12,
+    opacity: 0.7,
   },
 
   recapWrap: { marginTop: 26, marginBottom: 18, display: "grid", gap: 12, justifyItems: "center" },
