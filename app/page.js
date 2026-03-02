@@ -2,142 +2,244 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+const STORAGE_KEY = "kana_trainer_state_v1";
+
 export default function KanaTrainer() {
-  const kanaList = useMemo(() => [
-    ["あ", "a"],
-    ["い", "i"],
-    ["う", "u"],
-    ["え", "e"],
-    ["お", "o"],
-  ], []);
+  // Keep 5 for testing. Swap to your full 255 list later.
+  const kanaList = useMemo(
+    () => [
+      ["あ", "a"],
+      ["い", "i"],
+      ["う", "u"],
+      ["え", "e"],
+      ["お", "o"],
+    ],
+    []
+  );
+
+  const inputRef = useRef(null);
+  const startRef = useRef(0);
 
   const [order, setOrder] = useState([]);
   const [pos, setPos] = useState(0);
   const [romaji, setRomaji] = useState("");
-  const [results, setResults] = useState([]);
-  const [liveTime, setLiveTime] = useState(0);
-  const [started, setStarted] = useState(false);
+  const [results, setResults] = useState([]); // { kana, romaji, time, difficulty }
+  const [error, setError] = useState(false);
 
-  const startRef = useRef(0);
-  const rafRef = useRef(null);
-
+  // Load persisted state (optional but matches "ongoing progress" feel in screenshot)
   useEffect(() => {
-    const shuffled = shuffle([...Array(kanaList.length).keys()]);
-    setOrder(shuffled);
-  }, []);
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) throw new Error("no saved state");
 
-  useEffect(() => {
-    if (!started) return;
+      const saved = JSON.parse(raw);
+      const ok =
+        saved &&
+        saved.version === 1 &&
+        Array.isArray(saved.order) &&
+        typeof saved.pos === "number" &&
+        Array.isArray(saved.results) &&
+        saved.kanaCount === kanaList.length;
 
-    function tick() {
-      const elapsed = (performance.now() - startRef.current) / 1000;
-      setLiveTime(elapsed);
-      rafRef.current = requestAnimationFrame(tick);
+      if (!ok) throw new Error("bad saved state");
+
+      setOrder(saved.order);
+      setPos(saved.pos);
+      setResults(saved.results);
+    } catch {
+      const shuffled = shuffle([...Array(kanaList.length).keys()]);
+      setOrder(shuffled);
+      setPos(0);
+      setResults([]);
     }
+  }, [kanaList.length]);
 
-    rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [started]);
+  // Persist state
+  useEffect(() => {
+    if (!order.length) return;
+    const payload = {
+      version: 1,
+      kanaCount: kanaList.length,
+      order,
+      pos,
+      results,
+    };
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+      // ignore storage errors
+    }
+  }, [order, pos, results, kanaList.length]);
+
+  // Start timing each new prompt
+  useEffect(() => {
+    if (!order.length) return;
+    if (pos >= order.length) return;
+    startRef.current = performance.now();
+    setRomaji("");
+    setError(false);
+    // focus input like a game
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, [order, pos]);
 
   if (!order.length) return null;
 
   const finished = pos >= order.length;
-  const current = kanaList[order[pos]];
+  const current = !finished ? kanaList[order[pos]] : null;
 
   function classify(seconds) {
-    if (seconds <= 0.5) return "Easy";
-    if (seconds <= 1.5) return "Medium";
+    // More human thresholds than 0.5s/1.5s; tweak anytime.
+    if (seconds <= 2.0) return "Easy";
+    if (seconds <= 4.0) return "Medium";
     return "Hard";
   }
 
-  function handleChange(value) {
-    setRomaji(value);
+  function avgOf(filterFn) {
+    const arr = results.filter(filterFn);
+    if (!arr.length) return 0;
+    return arr.reduce((sum, r) => sum + r.time, 0) / arr.length;
+  }
 
-    if (!started) return;
+  const answered = results.length;
+  const total = kanaList.length;
 
-    if (value.trim().toLowerCase() === current[1]) {
-      const elapsed = (performance.now() - startRef.current) / 1000;
+  const avgTime = results.length
+    ? results.reduce((sum, r) => sum + r.time, 0) / results.length
+    : 0;
 
-      setResults([...results, {
+  const avgEasy = avgOf((r) => r.difficulty === "Easy");
+  const avgMed = avgOf((r) => r.difficulty === "Medium");
+  const avgHard = avgOf((r) => r.difficulty === "Hard");
+
+  function onSubmit() {
+    if (finished) return;
+
+    const typed = romaji.trim().toLowerCase();
+    const expected = current[1];
+
+    if (typed !== expected) {
+      setError(true);
+      return;
+    }
+
+    const elapsed = (performance.now() - startRef.current) / 1000;
+    const difficulty = classify(elapsed);
+
+    setResults((prev) => [
+      ...prev,
+      {
         kana: current[0],
+        romaji: expected,
         time: elapsed,
-        difficulty: classify(elapsed),
-      }]);
+        difficulty,
+      },
+    ]);
 
-      setPos(pos + 1);
-      setRomaji("");
-      startRef.current = performance.now();
-    }
+    setPos((p) => p + 1);
   }
 
-  function startTimer() {
-    if (!started) {
-      setStarted(true);
-      startRef.current = performance.now();
-    }
+  function resetAll() {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {}
+    const shuffled = shuffle([...Array(kanaList.length).keys()]);
+    setOrder(shuffled);
+    setPos(0);
+    setResults([]);
+    setRomaji("");
+    setError(false);
+    startRef.current = performance.now();
+    setTimeout(() => inputRef.current?.focus(), 0);
   }
-
-  const avgTime =
-    results.length > 0
-      ? results.reduce((a, b) => a + b.time, 0) / results.length
-      : 0;
-
-  const focusKana = results
-    .filter(r => r.difficulty === "Hard")
-    .map(r => r.kana);
 
   return (
     <main style={styles.main}>
-      <div style={styles.card}>
+      <div style={styles.shell}>
         <h1 style={styles.title}>Japanese Kana Trainer</h1>
+        <div style={styles.subtitle}>Enter to submit.</div>
 
-        {!finished ? (
-          <>
-            <div
-              style={styles.kana}
-              onClick={startTimer}
-            >
-              {current[0]}
-            </div>
+        <div style={styles.statsTopRow}>
+          <Stat label="Answered" value={String(answered)} />
+          <Stat label="Progress" value={`${answered}/${total}`} />
+          <Stat label="Avg time (s)" value={avgTime.toFixed(2)} />
+          <button style={styles.resetBtn} onClick={resetAll} type="button">
+            Reset
+          </button>
+        </div>
 
+        <div style={styles.statsBottomRow}>
+          <Stat label="Avg easy (s)" value={avgEasy.toFixed(2)} />
+          <Stat label="Avg medium (s)" value={avgMed.toFixed(2)} />
+          <Stat label="Avg hard (s)" value={avgHard.toFixed(2)} />
+        </div>
+
+        <div style={styles.kanaWrap}>
+          <div style={styles.kana}>{finished ? "✓" : current[0]}</div>
+        </div>
+
+        <div style={styles.inputCard}>
+          <div style={styles.inputLabelRow}>
+            <div style={styles.inputLabel}>Romaji</div>
+          </div>
+
+          <div style={styles.inputFieldWrap}>
             <input
-              style={styles.input}
+              ref={inputRef}
               value={romaji}
-              onChange={(e) => handleChange(e.target.value)}
-              placeholder="Type romaji..."
-              autoFocus
+              onChange={(e) => {
+                setRomaji(e.target.value);
+                if (error) setError(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  onSubmit();
+                }
+              }}
+              style={{
+                ...styles.input,
+                ...(error ? styles.inputError : null),
+              }}
+              autoCapitalize="none"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder=""
+              disabled={finished}
             />
+            <div style={styles.inputHint}>Press Enter to submit form</div>
+          </div>
 
-            <div style={styles.timer}>
-              {started ? `Timer: ${liveTime.toFixed(2)}s` : "Click kana to start"}
-            </div>
-          </>
-        ) : (
-          <>
-            <h2>Session Complete 🎉</h2>
-
-            <p>Average Time: {avgTime.toFixed(2)}s</p>
-
-            <p>
-              Easy: {results.filter(r => r.difficulty === "Easy").length} | 
-              Medium: {results.filter(r => r.difficulty === "Medium").length} | 
-              Hard: {results.filter(r => r.difficulty === "Hard").length}
-            </p>
-
-            {focusKana.length > 0 && (
-              <p>Focus on: {focusKana.join(", ")}</p>
-            )}
-
+          <div style={styles.actionsRow}>
             <button
-              style={styles.button}
-              onClick={() => window.location.reload()}
+              style={{
+                ...styles.submitBtn,
+                ...(finished ? styles.submitBtnDisabled : null),
+              }}
+              onClick={onSubmit}
+              type="button"
+              disabled={finished}
             >
-              Restart
+              Submit (Enter)
             </button>
-          </>
-        )}
+
+            {finished && (
+              <div style={styles.doneText}>
+                Session complete. Hit <b>Reset</b> to reshuffle.
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </main>
+  );
+}
+
+function Stat({ label, value }) {
+  return (
+    <div style={styles.stat}>
+      <div style={styles.statLabel}>{label}</div>
+      <div style={styles.statValue}>{value}</div>
+    </div>
   );
 }
 
@@ -153,47 +255,164 @@ function shuffle(array) {
 const styles = {
   main: {
     minHeight: "100vh",
+    background:
+      "radial-gradient(1200px 600px at 50% 15%, rgba(255,255,255,0.06), rgba(0,0,0,0)), #0b0f19",
+    color: "rgba(255,255,255,0.92)",
     display: "grid",
     placeItems: "center",
-    background: "#0b0f19",
-    color: "#e7eaf3",
+    padding: "48px 16px",
+    fontFamily:
+      'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"',
   },
-  card: {
-    background: "rgba(255,255,255,0.06)",
-    padding: 40,
-    borderRadius: 20,
-    width: 450,
+
+  shell: {
+    width: "min(760px, 100%)",
     textAlign: "center",
   },
+
   title: {
-    fontWeight: 900,
-    marginBottom: 20,
+    margin: 0,
+    fontSize: "clamp(34px, 5vw, 44px)",
+    fontWeight: 800,
+    letterSpacing: "-0.02em",
+  },
+  subtitle: {
+    marginTop: 8,
+    fontSize: 12,
+    opacity: 0.65,
+  },
+
+  statsTopRow: {
+    marginTop: 26,
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr auto",
+    gap: 28,
+    alignItems: "start",
+    justifyItems: "center",
+  },
+  statsBottomRow: {
+    marginTop: 18,
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr",
+    gap: 28,
+    justifyItems: "center",
+  },
+
+  stat: {
+    textAlign: "center",
+    minWidth: 120,
+  },
+  statLabel: {
+    fontSize: 11,
+    opacity: 0.72,
+    marginBottom: 6,
+  },
+  statValue: {
+    fontSize: 28,
+    fontWeight: 700,
+    letterSpacing: "-0.01em",
+  },
+
+  resetBtn: {
+    height: 34,
+    padding: "0 14px",
+    borderRadius: 8,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.05)",
+    color: "rgba(255,255,255,0.9)",
+    cursor: "pointer",
+    fontWeight: 600,
+  },
+
+  kanaWrap: {
+    marginTop: 34,
+    marginBottom: 24,
+    display: "grid",
+    placeItems: "center",
   },
   kana: {
-    fontSize: "7rem",
-    margin: 20,
-    cursor: "pointer",
+    fontSize: "clamp(84px, 10vw, 118px)",
+    fontWeight: 500,
+    lineHeight: 1,
+    letterSpacing: "0.02em",
     userSelect: "none",
+    filter: "drop-shadow(0 10px 20px rgba(0,0,0,0.35))",
+  },
+
+  inputCard: {
+    width: "min(560px, 100%)",
+    margin: "0 auto",
+    padding: 16,
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.10)",
+    background: "rgba(255,255,255,0.04)",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
+    textAlign: "left",
+  },
+
+  inputLabelRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  inputLabel: {
+    fontSize: 12,
+    opacity: 0.85,
+  },
+
+  inputFieldWrap: {
+    position: "relative",
   },
   input: {
     width: "100%",
-    padding: 14,
-    borderRadius: 14,
-    border: "1px solid rgba(255,255,255,0.2)",
-    background: "rgba(0,0,0,0.3)",
-    color: "white",
-    fontSize: 16,
+    height: 44,
+    padding: "0 14px",
+    paddingRight: 190,
+    borderRadius: 8,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(0,0,0,0.20)",
+    color: "rgba(255,255,255,0.92)",
+    outline: "none",
+    fontSize: 14,
   },
-  timer: {
+  inputError: {
+    border: "1px solid rgba(255,80,80,0.85)",
+    boxShadow: "0 0 0 3px rgba(255,80,80,0.12)",
+  },
+  inputHint: {
+    position: "absolute",
+    right: 12,
+    top: "50%",
+    transform: "translateY(-50%)",
+    fontSize: 11,
+    opacity: 0.55,
+    pointerEvents: "none",
+    whiteSpace: "nowrap",
+  },
+
+  actionsRow: {
     marginTop: 12,
-    opacity: 0.8,
+    display: "flex",
+    gap: 12,
+    alignItems: "center",
   },
-  button: {
-    marginTop: 20,
-    padding: 14,
-    borderRadius: 14,
-    border: "none",
+  submitBtn: {
+    height: 34,
+    padding: "0 14px",
+    borderRadius: 8,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.06)",
+    color: "rgba(255,255,255,0.92)",
     cursor: "pointer",
-    fontWeight: 700,
+    fontWeight: 600,
+  },
+  submitBtnDisabled: {
+    opacity: 0.55,
+    cursor: "not-allowed",
+  },
+  doneText: {
+    fontSize: 12,
+    opacity: 0.75,
   },
 };
