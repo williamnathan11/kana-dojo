@@ -342,7 +342,9 @@ export default function KanaTrainer() {
 
         {!finished ? (
           <div style={styles.kanaWrap}>
-            <div style={styles.kana}>{started ? current[0] : "Welcome!"}</div>
+            <div style={started ? styles.kana : styles.welcome}>
+              {started ? current[0] : "Welcome!"}
+            </div>
             {!started && (
               <div style={styles.welcomeHint}>
                 Click the textbox, then press any key to begin.
@@ -569,4 +571,10 @@ const styles = {
     pointerEvents: "none",
     whiteSpace: "nowrap",
   },
+  welcome: {
+    fontFamily: "cursive",
+    fontSize: "clamp(64px, 7vw, 92px)",
+    fontWeight: 700,
+    letterSpacing: "-0.02em",
+  }
 };
