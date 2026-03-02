@@ -100,6 +100,7 @@ export default function KanaTrainer() {
   // Live running timer (resets via startRef on each kana)
   useEffect(() => {
     if (!order.length) return;
+
     if (finished) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
@@ -154,8 +155,7 @@ export default function KanaTrainer() {
     if (typed === expected) {
       recordCorrectAnswer();
     } else {
-      // Optional: only show "error" styling if user has typed at least expected length
-      // (keeps the UI calm while they're still mid-typing).
+      // show "error" styling only when they've typed at least expected length
       if (typed.length >= expected.length) setError(true);
     }
   }
@@ -185,6 +185,10 @@ export default function KanaTrainer() {
     ? results.reduce((sum, r) => sum + r.time, 0) / results.length
     : 0;
 
+  const sortedRecap = useMemo(() => {
+    return [...results].sort((a, b) => b.time - a.time);
+  }, [results]);
+
   if (!order.length) return null;
 
   return (
@@ -200,12 +204,49 @@ export default function KanaTrainer() {
           <Stat label="Answered" value={String(answered)} />
           <Stat label="Progress" value={`${answered}/${total}`} />
           <Stat label="Avg time (s)" value={avgTime.toFixed(2)} />
-          <Stat label="Running (s)" value={finished ? "0.00" : runningTime.toFixed(2)} />
+          <Stat
+            label="Running (s)"
+            value={finished ? "0.00" : runningTime.toFixed(2)}
+          />
         </div>
 
-        <div style={styles.kanaWrap}>
-          <div style={styles.kana}>{finished ? "✓" : current[0]}</div>
-        </div>
+        {/* Main content area: Kana while playing, Recap table when finished */}
+        {!finished ? (
+          <div style={styles.kanaWrap}>
+            <div style={styles.kana}>{current[0]}</div>
+          </div>
+        ) : (
+          <div style={styles.recapWrap}>
+            <div style={styles.recapTitle}>Session Recap</div>
+
+            <div style={styles.tableWrap}>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>Kana</th>
+                    <th style={styles.th}>Romaji</th>
+                    <th style={styles.thRight}>Time (s)</th>
+                    <th style={styles.th}>Difficulty</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedRecap.map((r, idx) => (
+                    <tr key={`${r.kana}-${idx}`} style={styles.tr}>
+                      <td style={styles.tdKana}>{r.kana}</td>
+                      <td style={styles.td}>{r.romaji}</td>
+                      <td style={styles.tdRight}>{r.time.toFixed(2)}</td>
+                      <td style={styles.td}>{r.difficulty}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={styles.doneText}>
+              Sorted longest → shortest. Hit <b>Reset</b> to reshuffle.
+            </div>
+          </div>
+        )}
 
         <div style={styles.inputCard}>
           <div style={styles.inputLabelRow}>
@@ -229,12 +270,6 @@ export default function KanaTrainer() {
             />
             <div style={styles.inputHint}>Auto-submits when correct</div>
           </div>
-
-          {finished && (
-            <div style={styles.doneText}>
-              Session complete. Hit <b>Reset</b> to reshuffle.
-            </div>
-          )}
         </div>
       </div>
     </main>
@@ -296,7 +331,6 @@ const styles = {
     fontWeight: 600,
   },
 
-  // Single-line indicators
   statsRow: {
     marginTop: 22,
     display: "flex",
@@ -337,6 +371,70 @@ const styles = {
     letterSpacing: "0.02em",
     userSelect: "none",
     filter: "drop-shadow(0 10px 20px rgba(0,0,0,0.35))",
+  },
+
+  recapWrap: {
+    marginTop: 26,
+    marginBottom: 18,
+    display: "grid",
+    gap: 12,
+    justifyItems: "center",
+  },
+  recapTitle: {
+    fontSize: 14,
+    fontWeight: 700,
+    opacity: 0.9,
+  },
+  tableWrap: {
+    width: "min(760px, 100%)",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.10)",
+    background: "rgba(255,255,255,0.04)",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
+    overflow: "hidden",
+  },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+  },
+  th: {
+    textAlign: "left",
+    fontSize: 12,
+    fontWeight: 700,
+    padding: "12px 14px",
+    borderBottom: "1px solid rgba(255,255,255,0.10)",
+    background: "rgba(0,0,0,0.18)",
+    opacity: 0.9,
+  },
+  thRight: {
+    textAlign: "right",
+    fontSize: 12,
+    fontWeight: 700,
+    padding: "12px 14px",
+    borderBottom: "1px solid rgba(255,255,255,0.10)",
+    background: "rgba(0,0,0,0.18)",
+    opacity: 0.9,
+  },
+  tr: {
+    borderBottom: "1px solid rgba(255,255,255,0.06)",
+  },
+  td: {
+    padding: "12px 14px",
+    fontSize: 13,
+    opacity: 0.9,
+  },
+  tdRight: {
+    padding: "12px 14px",
+    fontSize: 13,
+    textAlign: "right",
+    opacity: 0.9,
+    fontVariantNumeric: "tabular-nums",
+  },
+  tdKana: {
+    padding: "12px 14px",
+    fontSize: 18,
+    letterSpacing: "0.02em",
+    opacity: 0.95,
   },
 
   inputCard: {
@@ -392,8 +490,8 @@ const styles = {
   },
 
   doneText: {
-    marginTop: 10,
     fontSize: 12,
     opacity: 0.75,
+    marginTop: 2,
   },
 };
