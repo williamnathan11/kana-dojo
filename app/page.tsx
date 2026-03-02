@@ -146,7 +146,7 @@ function buildKanaList() {
 
 const ALL_KANA = buildKanaList();
 
-function loadState() {
+function loadState(): unknown {
   try {
     const raw = localStorage.getItem(LS_STATE_KEY);
     if (!raw) return null;
@@ -156,7 +156,7 @@ function loadState() {
   }
 }
 
-function saveState(state) {
+function saveState(state: unknown) {
   try {
     localStorage.setItem(LS_STATE_KEY, JSON.stringify(state));
   } catch {}
