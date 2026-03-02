@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const STORAGE_KEY = "kana_trainer_state_v5";
+const STORAGE_KEY = "kana_trainer_state_v4";
 
 export default function KanaTrainer() {
-  // 255-ish list as you provided (your current list length depends on what you include)
+  // 255 items: Hiragana + Katakana + dakuten/handakuten + yōon + small kana + common foreign katakana
   const kanaList = useMemo(() => {
     const hiragana_basic = [
       ["あ", "a"], ["い", "i"], ["う", "u"], ["え", "e"], ["お", "o"],
@@ -79,11 +79,28 @@ export default function KanaTrainer() {
       ["ピャ", "pya"], ["ピュ", "pyu"], ["ピョ", "pyo"],
     ];
 
+    //const small_hiragana = [
+    //  ["ぁ", "xa"], ["ぃ", "xi"], ["ぅ", "xu"], ["ぇ", "xe"], ["ぉ", "xo"],
+    //  ["ゃ", "xya"], ["ゅ", "xyu"], ["ょ", "xyo"],
+    //  ["っ", "xtsu"],
+    //  ["ゎ", "xwa"],
+    //  ["ゕ", "xka"], ["ゖ", "xke"],
+    //];
+
+    //const small_katakana = [
+    //  ["ァ", "xa"], ["ィ", "xi"], ["ゥ", "xu"], ["ェ", "xe"], ["ォ", "xo"],
+    //  ["ャ", "xya"], ["ュ", "xyu"], ["ョ", "xyo"],
+    //  ["ッ", "xtsu"],
+    //  ["ヮ", "xwa"],
+    //  ["ヵ", "xka"], ["ヶ", "xke"],
+    //];
+
+    // Common foreign-sound katakana (33 items) to hit 241 total
     const extras = [
       ["ヴ", "vu"], ["ウィ", "wi"], ["ウェ", "we"], ["ウォ", "wo"],
       ["ヴァ", "va"], ["ヴィ", "vi"], ["ヴェ", "ve"], ["ヴォ", "vo"], ["ヴュ", "vyu"],
       ["ファ", "fa"], ["フィ", "fi"], ["フェ", "fe"], ["フォ", "fo"], ["フュ", "fyu"],
-      ["ティ", "ti"], ["トゥ", "tu"], ["ディ", "di"], ["ドゥ", "du"], ["テュ", "tyu"], ["デュ", "dyu"],
+      ["ティ", "ti"], ["トゥ", "tu"], ["ディ", "di"], ["ドゥ", "du"], ["テュ", "tyu"],["デュ", "dyu"],
       ["シェ", "she"], ["チェ", "che"], ["ジェ", "je"], ["イェ", "ye"],
       ["ツァ", "tsa"], ["ツィ", "tsi"], ["ツェ", "tse"], ["ツォ", "tso"],
       ["グァ", "gwa"],
@@ -101,8 +118,6 @@ export default function KanaTrainer() {
     ];
   }, []);
 
-  const isMobileUI = useMedia("(pointer: coarse), (max-width: 640px)");
-
   const inputRef = useRef(null);
   const startRef = useRef(0);
   const rafRef = useRef(null);
@@ -111,10 +126,10 @@ export default function KanaTrainer() {
   const [order, setOrder] = useState([]);
   const [pos, setPos] = useState(0);
   const [romaji, setRomaji] = useState("");
-  const [results, setResults] = useState([]);
+  const [results, setResults] = useState([]); // { kana, romaji, time, difficulty }
   const [error, setError] = useState(false);
   const [runningTime, setRunningTime] = useState(0);
-  const [started, setStarted] = useState(false);
+  const [started, setStarted] = useState(false); // <-- Welcome gate
 
   // Load state
   useEffect(() => {
@@ -125,7 +140,7 @@ export default function KanaTrainer() {
       const saved = JSON.parse(raw);
       const ok =
         saved &&
-        saved.version === 5 &&
+        saved.version === 4 &&
         Array.isArray(saved.order) &&
         typeof saved.pos === "number" &&
         Array.isArray(saved.results) &&
@@ -151,7 +166,7 @@ export default function KanaTrainer() {
   useEffect(() => {
     if (!order.length) return;
     const payload = {
-      version: 5,
+      version: 4,
       kanaCount: kanaList.length,
       order,
       pos,
@@ -177,7 +192,6 @@ export default function KanaTrainer() {
   // Reset timer each new kana (only after started)
   useEffect(() => {
     if (!order.length) return;
-
     if (!started) {
       setRunningTime(0);
       return;
@@ -190,18 +204,14 @@ export default function KanaTrainer() {
     setRomaji("");
     setError(false);
 
-    // Mobile: keep keyboard up if user is already typing, but don't force-scroll
-    setTimeout(() => {
-      if (!inputRef.current) return;
-      const active = document.activeElement === inputRef.current;
-      if (active) inputRef.current.focus();
-    }, 0);
+    setTimeout(() => inputRef.current?.focus(), 0);
   }, [order, pos, finished, started]);
 
   // Live running timer (only after started)
   useEffect(() => {
     if (!order.length) return;
 
+    // Stop ticking if not started or finished
     if (!started || finished) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
@@ -247,14 +257,8 @@ export default function KanaTrainer() {
   function handleChange(value) {
     if (finished) return;
 
-    // Mobile-friendly fallback: if keydown doesn't fire, first typed char still starts session.
-    if (!started) {
-      if (value && value.trim().length > 0) {
-        setRomaji("");
-        setStarted(true);
-      }
-      return;
-    }
+    // Before starting: ignore typing (we start on keydown and prevent the character)
+    if (!started) return;
 
     setRomaji(value);
     if (error) setError(false);
@@ -272,15 +276,18 @@ export default function KanaTrainer() {
   function handleKeyDown(e) {
     if (finished) return;
 
+    // Welcome gate: first key starts the session and does NOT type into the box
     if (!started) {
-      // Prevent the first character from entering the box
-      if (e.key && (e.key.length === 1 || e.key === "Enter" || e.key === " ")) {
+      // Prevent “first key” from appearing in the input for keys that produce characters
+      if (e.key.length === 1 || e.key === "Enter" || e.key === " ") {
         e.preventDefault();
       }
-      setRomaji("");
       setStarted(true);
       return;
     }
+
+    // Optional: allow Enter to do nothing (since autosubmit handles correctness)
+    // Keeping this empty intentionally.
   }
 
   function resetAll() {
@@ -298,7 +305,7 @@ export default function KanaTrainer() {
     setStarted(false);
     submittingRef.current = false;
 
-    // Do NOT auto-focus on reset (mobile: avoid surprise keyboard)
+    setTimeout(() => inputRef.current?.focus(), 0);
   }
 
   const answered = results.length;
@@ -314,70 +321,22 @@ export default function KanaTrainer() {
 
   if (!order.length) return null;
 
-  const mainStyle = {
-    ...styles.main,
-    minHeight: "100dvh",
-    justifyContent: isMobileUI ? "flex-start" : "center",
-    paddingTop: isMobileUI ? "18px" : "48px",
-    paddingLeft: isMobileUI ? "12px" : "16px",
-    paddingRight: isMobileUI ? "12px" : "16px",
-    paddingBottom: isMobileUI
-      ? "calc(16px + env(safe-area-inset-bottom))"
-      : "48px",
-  };
-
-  const shellStyle = {
-    ...styles.shell,
-    width: "100%",
-    maxWidth: 900,
-  };
-
-  const statsRowStyle = {
-    ...styles.statsRow,
-    flexWrap: isMobileUI ? "wrap" : "nowrap",
-    overflowX: "visible",
-    gap: isMobileUI ? 14 : 28,
-    rowGap: isMobileUI ? 14 : 0,
-  };
-
-  const statStyle = {
-    ...styles.stat,
-    minWidth: isMobileUI ? 130 : 140,
-  };
-
-  const inputCardStyle = isMobileUI
-    ? {
-        ...styles.inputCard,
-        position: "sticky",
-        bottom: "calc(10px + env(safe-area-inset-bottom))",
-        backdropFilter: "blur(10px)",
-      }
-    : styles.inputCard;
-
-  const inputStyle = {
-    ...styles.input,
-    height: isMobileUI ? 52 : 44,
-    fontSize: 16, // IMPORTANT: prevents iOS zoom
-    paddingRight: isMobileUI ? 14 : 190,
-  };
-
   return (
-    <main style={mainStyle}>
-      <div style={shellStyle}>
+    <main style={styles.main}>
+      <div style={styles.shell}>
         <h1 style={styles.title}>Japanese Kana Trainer</h1>
 
         <button style={styles.resetBtn} onClick={resetAll} type="button">
           Reset
         </button>
 
-        <div style={statsRowStyle}>
-          <Stat label="Answered" value={String(answered)} statStyle={statStyle} />
-          <Stat label="Progress" value={`${answered}/${total}`} statStyle={statStyle} />
-          <Stat label="Avg time (s)" value={avgTime.toFixed(2)} statStyle={statStyle} />
+        <div style={styles.statsRow}>
+          <Stat label="Answered" value={String(answered)} />
+          <Stat label="Progress" value={`${answered}/${total}`} />
+          <Stat label="Avg time (s)" value={avgTime.toFixed(2)} />
           <Stat
             label="Running (s)"
             value={started && !finished ? runningTime.toFixed(2) : "0.00"}
-            statStyle={statStyle}
           />
         </div>
 
@@ -388,7 +347,7 @@ export default function KanaTrainer() {
             </div>
             {!started && (
               <div style={styles.welcomeHint}>
-                Tap the textbox, then type to begin.
+                Click the textbox, then press any key to begin.
               </div>
             )}
           </div>
@@ -396,53 +355,28 @@ export default function KanaTrainer() {
           <div style={styles.recapWrap}>
             <div style={styles.recapTitle}>Session Recap</div>
 
-            {/* Mobile: cards, Desktop: table */}
-            {isMobileUI ? (
-              <div style={styles.cardList}>
-                {sortedRecap.map((r, idx) => (
-                  <div key={`${r.kana}-${idx}`} style={styles.recapCard}>
-                    <div style={styles.recapCardKana}>{r.kana}</div>
-                    <div style={styles.recapCardMeta}>
-                      <div style={styles.recapCardRow}>
-                        <span style={styles.recapKey}>Romaji</span>
-                        <span style={styles.recapVal}>{r.romaji}</span>
-                      </div>
-                      <div style={styles.recapCardRow}>
-                        <span style={styles.recapKey}>Time</span>
-                        <span style={styles.recapVal}>{r.time.toFixed(2)} s</span>
-                      </div>
-                      <div style={styles.recapCardRow}>
-                        <span style={styles.recapKey}>Difficulty</span>
-                        <span style={styles.recapVal}>{r.difficulty}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div style={styles.tableWrap}>
-                <table style={styles.table}>
-                  <thead>
-                    <tr>
-                      <th style={styles.th}>Kana</th>
-                      <th style={styles.th}>Romaji</th>
-                      <th style={styles.thRight}>Time (s)</th>
-                      <th style={styles.th}>Difficulty</th>
+            <div style={styles.tableWrap}>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>Kana</th>
+                    <th style={styles.th}>Romaji</th>
+                    <th style={styles.thRight}>Time (s)</th>
+                    <th style={styles.th}>Difficulty</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedRecap.map((r, idx) => (
+                    <tr key={`${r.kana}-${idx}`} style={styles.tr}>
+                      <td style={styles.tdKana}>{r.kana}</td>
+                      <td style={styles.td}>{r.romaji}</td>
+                      <td style={styles.tdRight}>{r.time.toFixed(2)}</td>
+                      <td style={styles.td}>{r.difficulty}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {sortedRecap.map((r, idx) => (
-                      <tr key={`${r.kana}-${idx}`} style={styles.tr}>
-                        <td style={styles.tdKana}>{r.kana}</td>
-                        <td style={styles.td}>{r.romaji}</td>
-                        <td style={styles.tdRight}>{r.time.toFixed(2)}</td>
-                        <td style={styles.td}>{r.difficulty}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
             <div style={styles.doneText}>
               Sorted longest → shortest. Hit <b>Reset</b> to reshuffle.
@@ -450,7 +384,7 @@ export default function KanaTrainer() {
           </div>
         )}
 
-        <div style={inputCardStyle}>
+        <div style={styles.inputCard}>
           <div style={styles.inputLabelRow}>
             <div style={styles.inputLabel}>Romaji</div>
           </div>
@@ -462,59 +396,32 @@ export default function KanaTrainer() {
               onChange={(e) => handleChange(e.target.value)}
               onKeyDown={handleKeyDown}
               style={{
-                ...inputStyle,
+                ...styles.input,
                 ...(error ? styles.inputError : null),
               }}
-              inputMode="text"
-              enterKeyHint="done"
               autoCapitalize="none"
               autoComplete="off"
-              autoCorrect="off"
               spellCheck={false}
               disabled={finished}
               placeholder=""
             />
-
-            {!isMobileUI && (
-              <div style={styles.inputHint}>
-                {!started ? "Press any key to begin" : "Auto-submits when correct"}
-              </div>
-            )}
-          </div>
-
-          {isMobileUI && (
-            <div style={styles.inputHintBelow}>
+            <div style={styles.inputHint}>
               {!started ? "Press any key to begin" : "Auto-submits when correct"}
             </div>
-          )}
+          </div>
         </div>
       </div>
     </main>
   );
 }
 
-function Stat({ label, value, statStyle }) {
+function Stat({ label, value }) {
   return (
-    <div style={statStyle}>
+    <div style={styles.stat}>
       <div style={styles.statLabel}>{label}</div>
       <div style={styles.statValue}>{value}</div>
     </div>
   );
-}
-
-function useMedia(query) {
-  const [matches, setMatches] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const m = window.matchMedia(query);
-    const onChange = () => setMatches(m.matches);
-    onChange();
-    m.addEventListener?.("change", onChange);
-    return () => m.removeEventListener?.("change", onChange);
-  }, [query]);
-
-  return matches;
 }
 
 function shuffle(array) {
@@ -528,87 +435,73 @@ function shuffle(array) {
 
 const styles = {
   main: {
+    minHeight: "100vh",
     background:
       "radial-gradient(1200px 600px at 50% 15%, rgba(255,255,255,0.06), rgba(0,0,0,0)), #0b0f19",
     color: "rgba(255,255,255,0.92)",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    boxSizing: "border-box",
+    display: "grid",
+    placeItems: "center",
+    padding: "48px 16px",
     fontFamily:
       'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"',
   },
-
-  shell: { textAlign: "center" },
-
+  shell: { width: "min(900px, 100%)", textAlign: "center" },
   title: {
     margin: 0,
-    fontSize: "clamp(30px, 5vw, 44px)",
+    fontSize: "clamp(34px, 5vw, 44px)",
     fontWeight: 800,
     letterSpacing: "-0.02em",
   },
-
   resetBtn: {
     marginTop: 14,
-    height: 40,
+    height: 34,
     padding: "0 14px",
-    borderRadius: 10,
+    borderRadius: 8,
     border: "1px solid rgba(255,255,255,0.14)",
     background: "rgba(255,255,255,0.05)",
     color: "rgba(255,255,255,0.9)",
     cursor: "pointer",
-    fontWeight: 700,
-    touchAction: "manipulation",
+    fontWeight: 600,
   },
-
   statsRow: {
-    marginTop: 18,
+    marginTop: 22,
     display: "flex",
+    gap: 28,
     justifyContent: "center",
     alignItems: "flex-start",
+    flexWrap: "nowrap",
+    overflowX: "auto",
     paddingBottom: 6,
   },
-
-  stat: { textAlign: "center", flex: "0 0 auto" },
+  stat: { textAlign: "center", minWidth: 140, flex: "0 0 auto" },
   statLabel: { fontSize: 11, opacity: 0.72, marginBottom: 6 },
-  statValue: { fontSize: 26, fontWeight: 750, letterSpacing: "-0.01em" },
+  statValue: { fontSize: 28, fontWeight: 700, letterSpacing: "-0.01em" },
 
-  kanaWrap: {
-    marginTop: 26,
-    marginBottom: 16,
-    display: "grid",
-    placeItems: "center",
-    gap: 10,
-  },
+  kanaWrap: { marginTop: 34, marginBottom: 24, display: "grid", placeItems: "center", gap: 10 },
   kana: {
-    fontSize: "clamp(76px, 12vw, 118px)",
+    fontSize: "clamp(84px, 10vw, 118px)",
     fontWeight: 500,
     lineHeight: 1,
     letterSpacing: "0.02em",
     userSelect: "none",
     filter: "drop-shadow(0 10px 20px rgba(0,0,0,0.35))",
   },
-  welcome: {
-    fontFamily: "Georgia",
-    fontSize: "clamp(56px, 10vw, 92px)",
-    fontWeight: 700,
-    letterSpacing: "-0.02em",
+  welcomeHint: {
+    fontSize: 12,
+    opacity: 0.7,
   },
-  welcomeHint: { fontSize: 12, opacity: 0.7 },
 
-  recapWrap: { marginTop: 18, marginBottom: 14, display: "grid", gap: 12, justifyItems: "center" },
+  recapWrap: { marginTop: 26, marginBottom: 18, display: "grid", gap: 12, justifyItems: "center" },
   recapTitle: { fontSize: 14, fontWeight: 700, opacity: 0.9 },
-
   tableWrap: {
     width: "min(760px, 100%)",
     borderRadius: 10,
     border: "1px solid rgba(255,255,255,0.10)",
     background: "rgba(255,255,255,0.04)",
     boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
-    overflowX: "auto",
-    WebkitOverflowScrolling: "touch",
+    overflow: "hidden",
   },
-  table: { width: "100%", borderCollapse: "collapse", minWidth: 560 },
+  table: { width: "100%", borderCollapse: "collapse" },
   th: {
     textAlign: "left",
     fontSize: 12,
@@ -637,40 +530,13 @@ const styles = {
     fontVariantNumeric: "tabular-nums",
   },
   tdKana: { padding: "12px 14px", fontSize: 18, letterSpacing: "0.02em", opacity: 0.95 },
-
-  cardList: {
-    width: "min(760px, 100%)",
-    display: "grid",
-    gap: 10,
-  },
-  recapCard: {
-    display: "grid",
-    gridTemplateColumns: "64px 1fr",
-    gap: 12,
-    padding: 12,
-    borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.10)",
-    background: "rgba(255,255,255,0.04)",
-    boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
-  },
-  recapCardKana: {
-    fontSize: 30,
-    display: "grid",
-    placeItems: "center",
-    opacity: 0.95,
-  },
-  recapCardMeta: { display: "grid", gap: 6 },
-  recapCardRow: { display: "flex", justifyContent: "space-between", gap: 10 },
-  recapKey: { fontSize: 12, opacity: 0.65 },
-  recapVal: { fontSize: 13, opacity: 0.92, fontVariantNumeric: "tabular-nums" },
-
   doneText: { fontSize: 12, opacity: 0.75, marginTop: 2 },
 
   inputCard: {
     width: "min(560px, 100%)",
     margin: "0 auto",
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 10,
     border: "1px solid rgba(255,255,255,0.10)",
     background: "rgba(255,255,255,0.04)",
     boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
@@ -681,12 +547,15 @@ const styles = {
   inputFieldWrap: { position: "relative" },
   input: {
     width: "100%",
+    height: 44,
     padding: "0 14px",
-    borderRadius: 10,
+    paddingRight: 190,
+    borderRadius: 8,
     border: "1px solid rgba(255,255,255,0.14)",
     background: "rgba(0,0,0,0.20)",
     color: "rgba(255,255,255,0.92)",
     outline: "none",
+    fontSize: 14,
   },
   inputError: {
     border: "1px solid rgba(255,80,80,0.85)",
@@ -702,9 +571,10 @@ const styles = {
     pointerEvents: "none",
     whiteSpace: "nowrap",
   },
-  inputHintBelow: {
-    marginTop: 8,
-    fontSize: 11,
-    opacity: 0.62,
-  },
+  welcome: {
+    fontFamily: "Georgia",
+    fontSize: "clamp(64px, 7vw, 92px)",
+    fontWeight: 700,
+    letterSpacing: "-0.02em",
+  }
 };
