@@ -348,7 +348,9 @@ useEffect(() => {
 
     const arr = [];
     for (const o of map.values()) {
-      const avg_time = o.times.reduce((a, b) => a + b, 0) / o.times.length;
+      const avg_time =
+        o.times.reduce((a: number, b: number) => a + b, 0) /
+        o.times.length;
       arr.push({ ...o, avg_time, seen: o.times.length });
     }
 
