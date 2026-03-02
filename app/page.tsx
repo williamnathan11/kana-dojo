@@ -184,9 +184,9 @@ export default function TestPage() {
 
   const [userName, setUserName] = useState("");
 
-  const [order, setOrder] = useState([]);
+  const [order, setOrder] = useState<number[]>([]);
   const [pos, setPos] = useState(0);
-  const [results, setResults] = useState([]);
+  const [results, setResults] = useState<SavedState["results"]>([]);
 
   const [romaji, setRomaji] = useState("");
   const [error, setError] = useState("");
