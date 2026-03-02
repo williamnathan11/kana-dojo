@@ -114,8 +114,6 @@ export default function KanaTrainer() {
       ...katakana_basic,
       ...katakana_daku,
       ...katakana_yoon,
-      ...small_hiragana,
-      ...small_katakana,
       ...extras,
     ];
   }, []);
