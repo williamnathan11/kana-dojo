@@ -3,6 +3,22 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+
+type SavedState = {
+  kanaLen: number;
+  order: number[];
+  pos: number;
+  results: {
+    user: string;
+    kana: string;
+    expected: string;
+    time_s: number;
+    bucket: string;
+    ts: string;
+  }[];
+  liveElapsedMs: number;
+};
+
 // Buckets (seconds)
 const EASY_MAX = 0.5;
 const MEDIUM_MAX = 1.5;
@@ -146,11 +162,11 @@ function buildKanaList() {
 
 const ALL_KANA = buildKanaList();
 
-function loadState(): unknown {
+function loadState(): SavedState | null {
   try {
     const raw = localStorage.getItem(LS_STATE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw);
+    return JSON.parse(raw) as SavedState;
   } catch {
     return null;
   }
