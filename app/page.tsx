@@ -10,7 +10,7 @@ const MEDIUM_MAX = 1.5;
 const LS_STATE_KEY = "kana_dojo_v1_state";
 const LS_USER_KEY = "kana_dojo_v1_user";
 
-function classify(seconds) {
+function classify(seconds: number): "easy" | "medium" | "hard" {
   if (seconds <= EASY_MAX) return "easy";
   if (seconds <= MEDIUM_MAX) return "medium";
   return "hard";
