@@ -194,7 +194,7 @@ export default function TestPage() {
   // timer
   const startRef = useRef(0);
   const [liveElapsed, setLiveElapsed] = useState(0);
-  const rafRef = useRef(null);
+  const rafRef = useRef<number | null>(null);
 
   // Ensure name exists
   useEffect(() => {
@@ -259,7 +259,11 @@ useEffect(() => {
       rafRef.current = requestAnimationFrame(tick);
     }
     rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
   }, []);
 
   // Persist
