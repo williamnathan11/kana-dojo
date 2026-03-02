@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const STORAGE_KEY = "kana_trainer_state_v1";
+const STORAGE_KEY = "kana_trainer_state_v2";
 
 export default function KanaTrainer() {
-  // Keep 5 for testing. Swap to your full 255 list later.
+  // Keep 5 for testing. Swap to your full list later.
   const kanaList = useMemo(
     () => [
       ["あ", "a"],
@@ -19,14 +19,17 @@ export default function KanaTrainer() {
 
   const inputRef = useRef(null);
   const startRef = useRef(0);
+  const rafRef = useRef(null);
+  const submittingRef = useRef(false);
 
   const [order, setOrder] = useState([]);
   const [pos, setPos] = useState(0);
   const [romaji, setRomaji] = useState("");
   const [results, setResults] = useState([]); // { kana, romaji, time, difficulty }
   const [error, setError] = useState(false);
+  const [runningTime, setRunningTime] = useState(0);
 
-  // Load persisted state (optional but matches "ongoing progress" feel in screenshot)
+  // Load state
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -35,7 +38,7 @@ export default function KanaTrainer() {
       const saved = JSON.parse(raw);
       const ok =
         saved &&
-        saved.version === 1 &&
+        saved.version === 2 &&
         Array.isArray(saved.order) &&
         typeof saved.pos === "number" &&
         Array.isArray(saved.results) &&
@@ -58,7 +61,7 @@ export default function KanaTrainer() {
   useEffect(() => {
     if (!order.length) return;
     const payload = {
-      version: 1,
+      version: 2,
       kanaCount: kanaList.length,
       order,
       pos,
@@ -71,33 +74,108 @@ export default function KanaTrainer() {
     }
   }, [order, pos, results, kanaList.length]);
 
-  // Start timing each new prompt
-  useEffect(() => {
-    if (!order.length) return;
-    if (pos >= order.length) return;
-    startRef.current = performance.now();
-    setRomaji("");
-    setError(false);
-    // focus input like a game
-    setTimeout(() => inputRef.current?.focus(), 0);
-  }, [order, pos]);
-
-  if (!order.length) return null;
-
-  const finished = pos >= order.length;
+  const finished = order.length > 0 && pos >= order.length;
   const current = !finished ? kanaList[order[pos]] : null;
 
   function classify(seconds) {
-    // More human thresholds than 0.5s/1.5s; tweak anytime.
     if (seconds <= 2.0) return "Easy";
     if (seconds <= 4.0) return "Medium";
     return "Hard";
   }
 
-  function avgOf(filterFn) {
-    const arr = results.filter(filterFn);
-    if (!arr.length) return 0;
-    return arr.reduce((sum, r) => sum + r.time, 0) / arr.length;
+  // Reset timer each new kana + focus input
+  useEffect(() => {
+    if (!order.length) return;
+    if (finished) return;
+
+    submittingRef.current = false;
+    startRef.current = performance.now();
+    setRunningTime(0);
+    setRomaji("");
+    setError(false);
+
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, [order, pos, finished]);
+
+  // Live running timer (resets via startRef on each kana)
+  useEffect(() => {
+    if (!order.length) return;
+    if (finished) {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+      return;
+    }
+
+    function tick() {
+      const elapsed = (performance.now() - startRef.current) / 1000;
+      setRunningTime(elapsed);
+      rafRef.current = requestAnimationFrame(tick);
+    }
+
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    };
+  }, [order.length, finished]);
+
+  function recordCorrectAnswer() {
+    if (finished) return;
+    if (submittingRef.current) return;
+
+    submittingRef.current = true;
+
+    const elapsed = (performance.now() - startRef.current) / 1000;
+    const expected = current[1];
+
+    setResults((prev) => [
+      ...prev,
+      {
+        kana: current[0],
+        romaji: expected,
+        time: elapsed,
+        difficulty: classify(elapsed),
+      },
+    ]);
+
+    setPos((p) => p + 1);
+  }
+
+  function handleChange(value) {
+    if (finished) return;
+
+    setRomaji(value);
+    if (error) setError(false);
+
+    const typed = value.trim().toLowerCase();
+    const expected = current[1];
+
+    // Auto-submit only on exact match
+    if (typed === expected) {
+      recordCorrectAnswer();
+    } else {
+      // Optional: only show "error" styling if user has typed at least expected length
+      // (keeps the UI calm while they're still mid-typing).
+      if (typed.length >= expected.length) setError(true);
+    }
+  }
+
+  function resetAll() {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {}
+
+    const shuffled = shuffle([...Array(kanaList.length).keys()]);
+    setOrder(shuffled);
+    setPos(0);
+    setResults([]);
+    setRomaji("");
+    setError(false);
+    setRunningTime(0);
+    submittingRef.current = false;
+    startRef.current = performance.now();
+
+    setTimeout(() => inputRef.current?.focus(), 0);
   }
 
   const answered = results.length;
@@ -107,70 +185,22 @@ export default function KanaTrainer() {
     ? results.reduce((sum, r) => sum + r.time, 0) / results.length
     : 0;
 
-  const avgEasy = avgOf((r) => r.difficulty === "Easy");
-  const avgMed = avgOf((r) => r.difficulty === "Medium");
-  const avgHard = avgOf((r) => r.difficulty === "Hard");
-
-  function onSubmit() {
-    if (finished) return;
-
-    const typed = romaji.trim().toLowerCase();
-    const expected = current[1];
-
-    if (typed !== expected) {
-      setError(true);
-      return;
-    }
-
-    const elapsed = (performance.now() - startRef.current) / 1000;
-    const difficulty = classify(elapsed);
-
-    setResults((prev) => [
-      ...prev,
-      {
-        kana: current[0],
-        romaji: expected,
-        time: elapsed,
-        difficulty,
-      },
-    ]);
-
-    setPos((p) => p + 1);
-  }
-
-  function resetAll() {
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {}
-    const shuffled = shuffle([...Array(kanaList.length).keys()]);
-    setOrder(shuffled);
-    setPos(0);
-    setResults([]);
-    setRomaji("");
-    setError(false);
-    startRef.current = performance.now();
-    setTimeout(() => inputRef.current?.focus(), 0);
-  }
+  if (!order.length) return null;
 
   return (
     <main style={styles.main}>
       <div style={styles.shell}>
         <h1 style={styles.title}>Japanese Kana Trainer</h1>
-        <div style={styles.subtitle}>Enter to submit.</div>
 
-        <div style={styles.statsTopRow}>
+        <button style={styles.resetBtn} onClick={resetAll} type="button">
+          Reset
+        </button>
+
+        <div style={styles.statsRow}>
           <Stat label="Answered" value={String(answered)} />
           <Stat label="Progress" value={`${answered}/${total}`} />
           <Stat label="Avg time (s)" value={avgTime.toFixed(2)} />
-          <button style={styles.resetBtn} onClick={resetAll} type="button">
-            Reset
-          </button>
-        </div>
-
-        <div style={styles.statsBottomRow}>
-          <Stat label="Avg easy (s)" value={avgEasy.toFixed(2)} />
-          <Stat label="Avg medium (s)" value={avgMed.toFixed(2)} />
-          <Stat label="Avg hard (s)" value={avgHard.toFixed(2)} />
+          <Stat label="Running (s)" value={finished ? "0.00" : runningTime.toFixed(2)} />
         </div>
 
         <div style={styles.kanaWrap}>
@@ -186,16 +216,7 @@ export default function KanaTrainer() {
             <input
               ref={inputRef}
               value={romaji}
-              onChange={(e) => {
-                setRomaji(e.target.value);
-                if (error) setError(false);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  onSubmit();
-                }
-              }}
+              onChange={(e) => handleChange(e.target.value)}
               style={{
                 ...styles.input,
                 ...(error ? styles.inputError : null),
@@ -203,31 +224,17 @@ export default function KanaTrainer() {
               autoCapitalize="none"
               autoComplete="off"
               spellCheck={false}
+              disabled={finished}
               placeholder=""
-              disabled={finished}
             />
-            <div style={styles.inputHint}>Press Enter to submit form</div>
+            <div style={styles.inputHint}>Auto-submits when correct</div>
           </div>
 
-          <div style={styles.actionsRow}>
-            <button
-              style={{
-                ...styles.submitBtn,
-                ...(finished ? styles.submitBtnDisabled : null),
-              }}
-              onClick={onSubmit}
-              type="button"
-              disabled={finished}
-            >
-              Submit (Enter)
-            </button>
-
-            {finished && (
-              <div style={styles.doneText}>
-                Session complete. Hit <b>Reset</b> to reshuffle.
-              </div>
-            )}
-          </div>
+          {finished && (
+            <div style={styles.doneText}>
+              Session complete. Hit <b>Reset</b> to reshuffle.
+            </div>
+          )}
         </div>
       </div>
     </main>
@@ -266,7 +273,7 @@ const styles = {
   },
 
   shell: {
-    width: "min(760px, 100%)",
+    width: "min(900px, 100%)",
     textAlign: "center",
   },
 
@@ -276,31 +283,35 @@ const styles = {
     fontWeight: 800,
     letterSpacing: "-0.02em",
   },
-  subtitle: {
-    marginTop: 8,
-    fontSize: 12,
-    opacity: 0.65,
+
+  resetBtn: {
+    marginTop: 14,
+    height: 34,
+    padding: "0 14px",
+    borderRadius: 8,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.05)",
+    color: "rgba(255,255,255,0.9)",
+    cursor: "pointer",
+    fontWeight: 600,
   },
 
-  statsTopRow: {
-    marginTop: 26,
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr 1fr auto",
+  // Single-line indicators
+  statsRow: {
+    marginTop: 22,
+    display: "flex",
     gap: 28,
-    alignItems: "start",
-    justifyItems: "center",
-  },
-  statsBottomRow: {
-    marginTop: 18,
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr 1fr",
-    gap: 28,
-    justifyItems: "center",
+    justifyContent: "center",
+    alignItems: "flex-start",
+    flexWrap: "nowrap",
+    overflowX: "auto",
+    paddingBottom: 6,
   },
 
   stat: {
     textAlign: "center",
-    minWidth: 120,
+    minWidth: 140,
+    flex: "0 0 auto",
   },
   statLabel: {
     fontSize: 11,
@@ -311,17 +322,6 @@ const styles = {
     fontSize: 28,
     fontWeight: 700,
     letterSpacing: "-0.01em",
-  },
-
-  resetBtn: {
-    height: 34,
-    padding: "0 14px",
-    borderRadius: 8,
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "rgba(255,255,255,0.05)",
-    color: "rgba(255,255,255,0.9)",
-    cursor: "pointer",
-    fontWeight: 600,
   },
 
   kanaWrap: {
@@ -391,27 +391,8 @@ const styles = {
     whiteSpace: "nowrap",
   },
 
-  actionsRow: {
-    marginTop: 12,
-    display: "flex",
-    gap: 12,
-    alignItems: "center",
-  },
-  submitBtn: {
-    height: 34,
-    padding: "0 14px",
-    borderRadius: 8,
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "rgba(255,255,255,0.06)",
-    color: "rgba(255,255,255,0.92)",
-    cursor: "pointer",
-    fontWeight: 600,
-  },
-  submitBtnDisabled: {
-    opacity: 0.55,
-    cursor: "not-allowed",
-  },
   doneText: {
+    marginTop: 10,
     fontSize: 12,
     opacity: 0.75,
   },
