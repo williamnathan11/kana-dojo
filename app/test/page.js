@@ -6,12 +6,18 @@ import { useRouter } from "next/navigation";
 export default function TestPage() {
   const router = useRouter();
 
-  const kanaList = useMemo(() => buildKanaList(), []);
+  const kanaList = useMemo(() => [
+    ["あ", "a"],
+    ["い", "i"],
+    ["う", "u"],
+    ["え", "e"],
+    ["お", "o"],
+  ], []);
 
   const [order, setOrder] = useState([]);
   const [pos, setPos] = useState(0);
   const [romaji, setRomaji] = useState("");
-  const [results, setResults] = useState([]);
+  const [times, setTimes] = useState([]);
   const [liveTime, setLiveTime] = useState(0);
 
   const startRef = useRef(0);
@@ -35,7 +41,6 @@ export default function TestPage() {
     }
 
     rafRef.current = requestAnimationFrame(tick);
-
     return () => cancelAnimationFrame(rafRef.current);
   }, []);
 
@@ -52,17 +57,29 @@ export default function TestPage() {
     if (value.trim().toLowerCase() === current[1]) {
       const elapsed = (performance.now() - startRef.current) / 1000;
 
-      setResults([...results, elapsed]);
+      setTimes([...times, elapsed]);
       setPos(pos + 1);
       setRomaji("");
       startRef.current = performance.now();
     }
   }
 
+  function saveLeaderboard(avgTime) {
+    const board = JSON.parse(localStorage.getItem("kana_leaderboard") || "[]");
+    board.push({ name: user, avgTime });
+    localStorage.setItem("kana_leaderboard", JSON.stringify(board));
+  }
+
   const avgTime =
-    results.length > 0
-      ? results.reduce((a, b) => a + b, 0) / results.length
+    times.length > 0
+      ? times.reduce((a, b) => a + b, 0) / times.length
       : 0;
+
+  useEffect(() => {
+    if (finished && times.length > 0) {
+      saveLeaderboard(avgTime);
+    }
+  }, [finished]);
 
   return (
     <main style={styles.main}>
@@ -91,9 +108,9 @@ export default function TestPage() {
 
             <button
               style={styles.button}
-              onClick={() => window.location.reload()}
+              onClick={() => router.push("/")}
             >
-              Restart
+              Back to Leaderboard
             </button>
           </>
         )}
@@ -111,45 +128,20 @@ function shuffle(array) {
   return a;
 }
 
-function buildKanaList() {
-  return [
-    ["あ", "a"],
-    ["い", "i"],
-    ["う", "u"],
-    ["え", "e"],
-    ["お", "o"],
-    ["か", "ka"],
-    ["き", "ki"],
-    ["く", "ku"],
-    ["け", "ke"],
-    ["こ", "ko"],
-    ["さ", "sa"],
-    ["し", "shi"],
-    ["す", "su"],
-    ["せ", "se"],
-    ["そ", "so"],
-    ["た", "ta"],
-    ["ち", "chi"],
-    ["つ", "tsu"],
-    ["て", "te"],
-    ["と", "to"],
-  ];
-}
-
 const styles = {
   main: {
     minHeight: "100vh",
     display: "grid",
     placeItems: "center",
     background: "#0b0f19",
-    color: "#fff",
+    color: "#e7eaf3",
   },
   card: {
-    background: "#111827",
+    background: "rgba(255,255,255,0.06)",
     padding: 30,
-    borderRadius: 12,
-    textAlign: "center",
+    borderRadius: 16,
     width: 400,
+    textAlign: "center",
   },
   kana: {
     fontSize: "6rem",
@@ -157,14 +149,18 @@ const styles = {
   },
   input: {
     width: "100%",
-    padding: 10,
-    borderRadius: 8,
-    border: "none",
+    padding: 12,
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.2)",
+    background: "rgba(0,0,0,0.3)",
+    color: "white",
   },
   button: {
-    padding: 10,
-    borderRadius: 8,
+    marginTop: 15,
+    padding: 12,
+    borderRadius: 12,
     border: "none",
     cursor: "pointer",
+    fontWeight: 700,
   },
 };
