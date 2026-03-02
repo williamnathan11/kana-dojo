@@ -572,7 +572,7 @@ const styles = {
     whiteSpace: "nowrap",
   },
   welcome: {
-    fontFamily: "Georgia", serif,
+    fontFamily: "Georgia",
     fontSize: "clamp(64px, 7vw, 92px)",
     fontWeight: 700,
     letterSpacing: "-0.02em",
