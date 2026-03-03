@@ -2,105 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const STORAGE_KEY = "kana_trainer_state_v5";
+const STORAGE_KEY = "kana_trainer_state_v6";
+const KANA_URL = "/kana.json";
 
 export default function KanaTrainer() {
-  // 255-ish list as you provided (your current list length depends on what you include)
-  const kanaList = useMemo(() => {
-    const hiragana_basic = [
-      ["あ", "a"], ["い", "i"], ["う", "u"], ["え", "e"], ["お", "o"],
-      ["か", "ka"], ["き", "ki"], ["く", "ku"], ["け", "ke"], ["こ", "ko"],
-      ["さ", "sa"], ["し", "shi"], ["す", "su"], ["せ", "se"], ["そ", "so"],
-      ["た", "ta"], ["ち", "chi"], ["つ", "tsu"], ["て", "te"], ["と", "to"],
-      ["な", "na"], ["に", "ni"], ["ぬ", "nu"], ["ね", "ne"], ["の", "no"],
-      ["は", "ha"], ["ひ", "hi"], ["ふ", "fu"], ["へ", "he"], ["ほ", "ho"],
-      ["ま", "ma"], ["み", "mi"], ["む", "mu"], ["め", "me"], ["も", "mo"],
-      ["や", "ya"], ["ゆ", "yu"], ["よ", "yo"],
-      ["ら", "ra"], ["り", "ri"], ["る", "ru"], ["れ", "re"], ["ろ", "ro"],
-      ["わ", "wa"], ["を", "wo"],
-      ["ん", "n"],
-    ];
-
-    const hiragana_daku = [
-      ["が", "ga"], ["ぎ", "gi"], ["ぐ", "gu"], ["げ", "ge"], ["ご", "go"],
-      ["ざ", "za"], ["じ", "ji"], ["ず", "zu"], ["ぜ", "ze"], ["ぞ", "zo"],
-      ["だ", "da"], ["ぢ", "ji"], ["づ", "zu"], ["で", "de"], ["ど", "do"],
-      ["ば", "ba"], ["び", "bi"], ["ぶ", "bu"], ["べ", "be"], ["ぼ", "bo"],
-      ["ぱ", "pa"], ["ぴ", "pi"], ["ぷ", "pu"], ["ぺ", "pe"], ["ぽ", "po"],
-    ];
-
-    const hiragana_yoon = [
-      ["きゃ", "kya"], ["きゅ", "kyu"], ["きょ", "kyo"],
-      ["しゃ", "sha"], ["しゅ", "shu"], ["しょ", "sho"],
-      ["ちゃ", "cha"], ["ちゅ", "chu"], ["ちょ", "cho"],
-      ["にゃ", "nya"], ["にゅ", "nyu"], ["にょ", "nyo"],
-      ["ひゃ", "hya"], ["ひゅ", "hyu"], ["ひょ", "hyo"],
-      ["みゃ", "mya"], ["みゅ", "myu"], ["みょ", "myo"],
-      ["りゃ", "rya"], ["りゅ", "ryu"], ["りょ", "ryo"],
-      ["ぎゃ", "gya"], ["ぎゅ", "gyu"], ["ぎょ", "gyo"],
-      ["じゃ", "ja"], ["じゅ", "ju"], ["じょ", "jo"],
-      ["びゃ", "bya"], ["びゅ", "byu"], ["びょ", "byo"],
-      ["ぴゃ", "pya"], ["ぴゅ", "pyu"], ["ぴょ", "pyo"],
-    ];
-
-    const katakana_basic = [
-      ["ア", "a"], ["イ", "i"], ["ウ", "u"], ["エ", "e"], ["オ", "o"],
-      ["カ", "ka"], ["キ", "ki"], ["ク", "ku"], ["ケ", "ke"], ["コ", "ko"],
-      ["サ", "sa"], ["シ", "shi"], ["ス", "su"], ["セ", "se"], ["ソ", "so"],
-      ["タ", "ta"], ["チ", "chi"], ["ツ", "tsu"], ["テ", "te"], ["ト", "to"],
-      ["ナ", "na"], ["ニ", "ni"], ["ヌ", "nu"], ["ネ", "ne"], ["ノ", "no"],
-      ["ハ", "ha"], ["ヒ", "hi"], ["フ", "fu"], ["ヘ", "he"], ["ホ", "ho"],
-      ["マ", "ma"], ["ミ", "mi"], ["ム", "mu"], ["メ", "me"], ["モ", "mo"],
-      ["ヤ", "ya"], ["ユ", "yu"], ["ヨ", "yo"],
-      ["ラ", "ra"], ["リ", "ri"], ["ル", "ru"], ["レ", "re"], ["ロ", "ro"],
-      ["ワ", "wa"], ["ヲ", "wo"],
-      ["ン", "n"],
-    ];
-
-    const katakana_daku = [
-      ["ガ", "ga"], ["ギ", "gi"], ["グ", "gu"], ["ゲ", "ge"], ["ゴ", "go"],
-      ["ザ", "za"], ["ジ", "ji"], ["ズ", "zu"], ["ゼ", "ze"], ["ゾ", "zo"],
-      ["ダ", "da"], ["ヂ", "ji"], ["ヅ", "zu"], ["デ", "de"], ["ド", "do"],
-      ["バ", "ba"], ["ビ", "bi"], ["ブ", "bu"], ["ベ", "be"], ["ボ", "bo"],
-      ["パ", "pa"], ["ピ", "pi"], ["プ", "pu"], ["ペ", "pe"], ["ポ", "po"],
-    ];
-
-    const katakana_yoon = [
-      ["キャ", "kya"], ["キュ", "kyu"], ["キョ", "kyo"],
-      ["シャ", "sha"], ["シュ", "shu"], ["ショ", "sho"],
-      ["チャ", "cha"], ["チュ", "chu"], ["チョ", "cho"],
-      ["ニャ", "nya"], ["ニュ", "nyu"], ["ニョ", "nyo"],
-      ["ヒャ", "hya"], ["ヒュ", "hyu"], ["ヒョ", "hyo"],
-      ["ミャ", "mya"], ["ミュ", "myu"], ["ミョ", "myo"],
-      ["リャ", "rya"], ["リュ", "ryu"], ["リョ", "ryo"],
-      ["ギャ", "gya"], ["ギュ", "gyu"], ["ギョ", "gyo"],
-      ["ジャ", "ja"], ["ジュ", "ju"], ["ジョ", "jo"],
-      ["ビャ", "bya"], ["ビュ", "byu"], ["ビョ", "byo"],
-      ["ピャ", "pya"], ["ピュ", "pyu"], ["ピョ", "pyo"],
-    ];
-
-    const extras = [
-      ["ヴ", "vu"], ["ウィ", "wi"], ["ウェ", "we"], ["ウォ", "wo"],
-      ["ヴァ", "va"], ["ヴィ", "vi"], ["ヴェ", "ve"], ["ヴォ", "vo"], ["ヴュ", "vyu"],
-      ["ファ", "fa"], ["フィ", "fi"], ["フェ", "fe"], ["フォ", "fo"], ["フュ", "fyu"],
-      ["ティ", "ti"], ["トゥ", "tu"], ["ディ", "di"], ["ドゥ", "du"], ["テュ", "tyu"], ["デュ", "dyu"],
-      ["シェ", "she"], ["チェ", "che"], ["ジェ", "je"], ["イェ", "ye"],
-      ["ツァ", "tsa"], ["ツィ", "tsi"], ["ツェ", "tse"], ["ツォ", "tso"],
-      ["グァ", "gwa"],
-      ["クァ", "kwa"], ["クィ", "kwi"], ["クェ", "kwe"], ["クォ", "kwo"],
-    ];
-
-    return [
-      ...hiragana_basic,
-      ...hiragana_daku,
-      ...hiragana_yoon,
-      ...katakana_basic,
-      ...katakana_daku,
-      ...katakana_yoon,
-      ...extras,
-    ];
-  }, []);
-
   const isMobileUI = useMedia("(pointer: coarse), (max-width: 640px)");
 
   const inputRef = useRef(null);
@@ -108,16 +13,60 @@ export default function KanaTrainer() {
   const rafRef = useRef(null);
   const submittingRef = useRef(false);
 
+  const [kanaList, setKanaList] = useState(null); // null = loading
+  const [kanaLoadError, setKanaLoadError] = useState("");
+
   const [order, setOrder] = useState([]);
   const [pos, setPos] = useState(0);
   const [romaji, setRomaji] = useState("");
-  const [results, setResults] = useState([]);
+  const [results, setResults] = useState([]); // { kana, romaji, time, difficulty }
   const [error, setError] = useState(false);
   const [runningTime, setRunningTime] = useState(0);
-  const [started, setStarted] = useState(false);
+  const [started, setStarted] = useState(false); // Welcome gate
 
-  // Load state
+  // Load kana.json
   useEffect(() => {
+    let cancelled = false;
+
+    async function loadKana() {
+      try {
+        setKanaLoadError("");
+        setKanaList(null);
+
+        const res = await fetch(KANA_URL, { cache: "no-store" });
+        if (!res.ok) throw new Error(`Failed to load ${KANA_URL} (${res.status})`);
+
+        const data = await res.json();
+        if (!data || !Array.isArray(data.items)) {
+          throw new Error("Invalid kana.json format: expected { items: [...] }");
+        }
+
+        const list = data.items.map((x) => [String(x.kana ?? ""), String(x.romaji ?? "")]);
+
+        if (!list.length) throw new Error("kana.json has 0 items");
+        for (const [k, r] of list) {
+          if (!k.trim() || !r.trim()) throw new Error("kana.json contains empty kana/romaji");
+        }
+
+        if (!cancelled) setKanaList(list);
+      } catch (e) {
+        if (!cancelled) {
+          setKanaLoadError(e?.message || "Failed to load kana.json");
+          setKanaList([]); // stop spinner
+        }
+      }
+    }
+
+    loadKana();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Load state (after kanaList available)
+  useEffect(() => {
+    if (!kanaList || kanaList.length === 0) return;
+
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) throw new Error("no saved state");
@@ -125,7 +74,7 @@ export default function KanaTrainer() {
       const saved = JSON.parse(raw);
       const ok =
         saved &&
-        saved.version === 5 &&
+        saved.version === 6 &&
         Array.isArray(saved.order) &&
         typeof saved.pos === "number" &&
         Array.isArray(saved.results) &&
@@ -145,28 +94,31 @@ export default function KanaTrainer() {
       setResults([]);
       setStarted(false);
     }
-  }, [kanaList.length]);
+  }, [kanaList]);
 
   // Persist state
   useEffect(() => {
+    if (!kanaList || kanaList.length === 0) return;
     if (!order.length) return;
+
     const payload = {
-      version: 5,
+      version: 6,
       kanaCount: kanaList.length,
       order,
       pos,
       results,
       started,
     };
+
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch {
       // ignore
     }
-  }, [order, pos, results, started, kanaList.length]);
+  }, [kanaList, order, pos, results, started]);
 
-  const finished = order.length > 0 && pos >= order.length;
-  const current = !finished ? kanaList[order[pos]] : null;
+  const finished = kanaList && order.length > 0 && pos >= order.length;
+  const current = !finished && kanaList ? kanaList[order[pos]] : null;
 
   function classify(seconds) {
     if (seconds <= 2.0) return "Easy";
@@ -176,6 +128,7 @@ export default function KanaTrainer() {
 
   // Reset timer each new kana (only after started)
   useEffect(() => {
+    if (!kanaList || kanaList.length === 0) return;
     if (!order.length) return;
 
     if (!started) {
@@ -190,16 +143,15 @@ export default function KanaTrainer() {
     setRomaji("");
     setError(false);
 
-    // Mobile: keep keyboard up if user is already typing, but don't force-scroll
-    setTimeout(() => {
-      if (!inputRef.current) return;
-      const active = document.activeElement === inputRef.current;
-      if (active) inputRef.current.focus();
-    }, 0);
-  }, [order, pos, finished, started]);
+    // Mobile: don't force-focus (prevents keyboard popping / layout jump)
+    if (!isMobileUI) {
+      setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  }, [kanaList, order, pos, finished, started, isMobileUI]);
 
-  // Live running timer (only after started)
+  // Live running timer
   useEffect(() => {
+    if (!kanaList || kanaList.length === 0) return;
     if (!order.length) return;
 
     if (!started || finished) {
@@ -220,10 +172,10 @@ export default function KanaTrainer() {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     };
-  }, [order.length, started, finished]);
+  }, [kanaList, order.length, started, finished]);
 
   function recordCorrectAnswer() {
-    if (finished || !started) return;
+    if (finished || !started || !current) return;
     if (submittingRef.current) return;
 
     submittingRef.current = true;
@@ -247,7 +199,7 @@ export default function KanaTrainer() {
   function handleChange(value) {
     if (finished) return;
 
-    // Mobile-friendly fallback: if keydown doesn't fire, first typed char still starts session.
+    // Mobile fallback: if keydown doesn't fire cleanly, first typed char starts session
     if (!started) {
       if (value && value.trim().length > 0) {
         setRomaji("");
@@ -260,20 +212,20 @@ export default function KanaTrainer() {
     if (error) setError(false);
 
     const typed = value.trim().toLowerCase();
-    const expected = current[1];
+    const expected = current?.[1];
 
-    if (typed === expected) {
+    if (expected && typed === expected) {
       recordCorrectAnswer();
     } else {
-      if (typed.length >= expected.length) setError(true);
+      if (expected && typed.length >= expected.length) setError(true);
     }
   }
 
   function handleKeyDown(e) {
     if (finished) return;
 
+    // Welcome gate: first key starts session and does NOT type into the input
     if (!started) {
-      // Prevent the first character from entering the box
       if (e.key && (e.key.length === 1 || e.key === "Enter" || e.key === " ")) {
         e.preventDefault();
       }
@@ -288,6 +240,8 @@ export default function KanaTrainer() {
       localStorage.removeItem(STORAGE_KEY);
     } catch {}
 
+    if (!kanaList || kanaList.length === 0) return;
+
     const shuffled = shuffle([...Array(kanaList.length).keys()]);
     setOrder(shuffled);
     setPos(0);
@@ -297,12 +251,11 @@ export default function KanaTrainer() {
     setRunningTime(0);
     setStarted(false);
     submittingRef.current = false;
-
-    // Do NOT auto-focus on reset (mobile: avoid surprise keyboard)
+    // No autofocus on reset (mobile-friendly)
   }
 
   const answered = results.length;
-  const total = kanaList.length;
+  const total = kanaList?.length ?? 0;
 
   const avgTime = results.length
     ? results.reduce((sum, r) => sum + r.time, 0) / results.length
@@ -311,6 +264,32 @@ export default function KanaTrainer() {
   const sortedRecap = useMemo(() => {
     return [...results].sort((a, b) => b.time - a.time);
   }, [results]);
+
+  // Loading / error states
+  if (kanaList === null) {
+    return (
+      <main style={{ ...styles.main, minHeight: "100dvh" }}>
+        <div style={styles.shell}>
+          <h1 style={styles.title}>Japanese Kana Trainer</h1>
+          <div style={{ marginTop: 14, opacity: 0.75 }}>Loading kana…</div>
+        </div>
+      </main>
+    );
+  }
+
+  if (kanaLoadError) {
+    return (
+      <main style={{ ...styles.main, minHeight: "100dvh" }}>
+        <div style={styles.shell}>
+          <h1 style={styles.title}>Japanese Kana Trainer</h1>
+          <div style={{ marginTop: 14, opacity: 0.9 }}>
+            Couldn’t load <b>{KANA_URL}</b>
+          </div>
+          <div style={{ marginTop: 8, opacity: 0.7 }}>{kanaLoadError}</div>
+        </div>
+      </main>
+    );
+  }
 
   if (!order.length) return null;
 
@@ -324,12 +303,6 @@ export default function KanaTrainer() {
     paddingBottom: isMobileUI
       ? "calc(16px + env(safe-area-inset-bottom))"
       : "48px",
-  };
-
-  const shellStyle = {
-    ...styles.shell,
-    width: "100%",
-    maxWidth: 900,
   };
 
   const statsRowStyle = {
@@ -357,13 +330,13 @@ export default function KanaTrainer() {
   const inputStyle = {
     ...styles.input,
     height: isMobileUI ? 52 : 44,
-    fontSize: 16, // IMPORTANT: prevents iOS zoom
+    fontSize: 16, // prevents iOS input zoom
     paddingRight: isMobileUI ? 14 : 190,
   };
 
   return (
     <main style={mainStyle}>
-      <div style={shellStyle}>
+      <div style={{ ...styles.shell, width: "100%", maxWidth: 900 }}>
         <h1 style={styles.title}>Japanese Kana Trainer</h1>
 
         <button style={styles.resetBtn} onClick={resetAll} type="button">
@@ -384,7 +357,7 @@ export default function KanaTrainer() {
         {!finished ? (
           <div style={styles.kanaWrap}>
             <div style={started ? styles.kana : styles.welcome}>
-              {started ? current[0] : "Welcome!"}
+              {started ? current?.[0] : "Welcome!"}
             </div>
             {!started && (
               <div style={styles.welcomeHint}>
@@ -396,7 +369,6 @@ export default function KanaTrainer() {
           <div style={styles.recapWrap}>
             <div style={styles.recapTitle}>Session Recap</div>
 
-            {/* Mobile: cards, Desktop: table */}
             {isMobileUI ? (
               <div style={styles.cardList}>
                 {sortedRecap.map((r, idx) => (
